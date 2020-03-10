@@ -5,6 +5,8 @@
     <Authors>Bancho</Authors>
     <Company>Modus Operandi</Company>
     <Description>Epic networking.</Description>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <RepositoryUrl>https://github.com/Unbancho/ModusOperandi</RepositoryUrl>
   </PropertyGroup>
 
 </Project>
