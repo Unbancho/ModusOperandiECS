@@ -155,32 +155,17 @@ namespace ModusOperandi.Messaging
         }
     }
 
-    public class MessageProcessor
+    public abstract class MessageProcessor<T>
     {
-        public static MessageProcessor operator +(MessageProcessor p1, MessageProcessor p2)
-        {
-            return new MessageProcessor()
-            {
-                ProcessingMethods = (p1.ProcessingMethods
-                .Concat(p2.ProcessingMethods
-                .Where(x => !p1.ProcessingMethods.ContainsKey(x.Key))))
-                .ToDictionary(x => x.Key, x => x.Value)
-            };
-        }
-
-        public Dictionary<Enum, MethodInfo> ProcessingMethods { get; set; }
-
-        private Type _flagType;
-        public Type FlagType { get { return _flagType; } set { if (value.IsDefined(typeof(FlagsAttribute), false)) _flagType = value; else throw new InvalidFlagType(value); } }
+        public abstract Dictionary<T, MethodInfo> ProcessingMethods { get; set; }
 
         public virtual void ProcessMessage(Message message)
         {
             object[] parametersToPass = new object[] { message };
-            MethodInfo method;
-            foreach (Enum flag in message.GetFlags())
+            foreach (var flag in message.GetFlags())
             {
-                var e = (Enum)Convert.ChangeType((Enum)Enum.ToObject(FlagType, flag), FlagType);
-                if (ProcessingMethods.TryGetValue(e, out method))
+                T e = (T)Convert.ChangeType(flag, typeof(T));
+                if (ProcessingMethods.TryGetValue(e, out MethodInfo method))
                     method.Invoke(this, parametersToPass);
             }
         }
