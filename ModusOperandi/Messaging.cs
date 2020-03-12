@@ -164,7 +164,7 @@ namespace ModusOperandi.Messaging
             object[] parametersToPass = new object[] { message };
             foreach (var flag in message.GetFlags())
             {
-                T e = (T)Convert.ChangeType(flag, typeof(T));
+                T e = (T)Convert.ChangeType(flag, typeof(Enum));
                 if (ProcessingMethods.TryGetValue(e, out MethodInfo method))
                     method.Invoke(this, parametersToPass);
             }
