@@ -15,6 +15,7 @@ namespace ModusOperandi.Networking
 
         public delegate void ConnectionHandler(object obj, ConnectionArgs args);
         public delegate void MessageReceivedHandler(object obj, MessageReceivedArgs args);
+        public delegate void DisconnectionHandler(object obj, DisconnectionArgs args);
 
         public bool IsLocalConnection;
 
@@ -40,6 +41,7 @@ namespace ModusOperandi.Networking
 
         public event ConnectionHandler OnConnection;
         public event MessageReceivedHandler OnMessageReceived;
+        public event DisconnectionHandler OnDisconnection;
 
         public List<ClientConnection> Clients = new List<ClientConnection>();
 
@@ -128,22 +130,21 @@ namespace ModusOperandi.Networking
         public void ListenForMessages(ClientConnection client)
         {
             string clientIP = client.IPAddress;
-            object message = null;
             while (true)
             {
                 try
                 {
-                    message = ReceiveMessage(client);
+                    object message = ReceiveMessage(client);
                     OnMessageReceived(this, new MessageReceivedArgs(message, client));
                 }
                 catch (Exception e) when (e is System.IO.IOException || e is InvalidOperationException)
                 {
-                    message = clientIP + " has disconnected.";
                     Clients.Remove(client);
                     if (!(e is InvalidOperationException))
                     {
                         ((TcpClient)client).Close();
                     }
+                    OnDisconnection(this, new DisconnectionArgs(client));
                     break;
                 }
             }
@@ -154,7 +155,7 @@ namespace ModusOperandi.Networking
             object dataReceived = NetworkUtilities.Receive(client);
             if (dataReceived == null)
             {
-                throw new System.InvalidOperationException();
+                throw new InvalidOperationException();
             }
             return dataReceived;
         }
@@ -206,7 +207,7 @@ namespace ModusOperandi.Networking
         {
             get
             {
-                return Int32.Parse(Client.Client.RemoteEndPoint.ToString().Split(':')[1]);
+                return int.Parse(Client.Client.RemoteEndPoint.ToString().Split(':')[1]);
             }
         }
 
@@ -332,5 +333,17 @@ namespace ModusOperandi.Networking
         public object Message { get{ return message; } }
 
         public ConnectionTcp Sender { get{ return sender; } }
+    }
+
+    public class DisconnectionArgs : EventArgs
+    {
+        private ClientConnection client;
+
+        public DisconnectionArgs(ClientConnection disconnectedClient)
+        {
+            client = disconnectedClient;
+        }
+
+        public ClientConnection Client { get { return client; } }
     }
 }
