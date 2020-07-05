@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ModusOperandi.ECS.Scenes;
-using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Utils.Extensions;
 
@@ -22,7 +21,7 @@ namespace ModusOperandi.ECS.EntityBuilding
                     .Where(t => t.Name == cname).First();
                 if (componentType == null)
                     continue;
-                var component = dict[componentName] == null
+                dynamic component = dict[componentName] == null
                     ? Activator.CreateInstance(componentType)
                     : Activator.CreateInstance(componentType, dict[componentName]);
                 scene.AddComponentToEntity(component, entity);
