@@ -28,7 +28,7 @@ namespace ModusOperandi.ECS.Scenes
             return componentManager;
         }
 
-        public static void SetComponentManager<T>(ComponentManager<T> componentManager) where T: IComponent
+        private static void SetComponentManager<T>(ComponentManager<T> componentManager) where T: IComponent
         {
             PerType<T>.ComponentManager = componentManager;
         }
