@@ -7,7 +7,7 @@
     <Description>Epic networking.</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <RepositoryUrl>https://github.com/Unbancho/ModusOperandi</RepositoryUrl>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
   </PropertyGroup>
 
 </Project>
