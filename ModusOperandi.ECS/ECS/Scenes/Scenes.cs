@@ -4,8 +4,8 @@ using System.IO;
 using System.Linq;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
-using ModusOperandi.ECS.Systems;
 using ModusOperandi.ECS.EntityBuilding;
+using ModusOperandi.ECS.Systems;
 using ModusOperandi.Utils.YAML;
 using SFML.Graphics;
 

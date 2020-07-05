@@ -1,4 +1,3 @@
-
 namespace ModusOperandi.ECS.Utils.Extensions
 {
     public static class StringExtensions

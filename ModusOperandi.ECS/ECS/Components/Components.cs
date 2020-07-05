@@ -41,7 +41,7 @@ namespace ModusOperandi.ECS.Components
             ManagedComponents[index] = (T) component;
         }
 
-        private Instance MakeInstance(int i)
+        private static Instance MakeInstance(int i)
         {
             return new Instance {i = i};
         }
