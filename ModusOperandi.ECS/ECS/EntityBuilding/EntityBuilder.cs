@@ -12,9 +12,9 @@ namespace ModusOperandi.ECS.EntityBuilding
         public static Entity BuildEntity(Dictionary<object, object> dict, Scene scene)
         {
             var entity = scene.EntityManager.CreateEntity();
-            foreach (var component in from componentName in dict.Keys let cname = ((string) componentName).Capitalized() + "Component" let componentType = AppDomain.CurrentDomain
+            foreach (var component in from componentName in dict.Keys let cname = (((string) componentName) + "Component").ToLower() let componentType = AppDomain.CurrentDomain
                 .GetAssemblies()
-                .SelectMany(t => t.GetTypes()).First(t => t.Name == cname) where componentType != null select dict[componentName] == null
+                .SelectMany(t => t.GetTypes()).First(t => t.Name.ToLower() == cname) where componentType != null select dict[componentName] == null
                 ? Activator.CreateInstance(componentType)
                 : Activator.CreateInstance(componentType, dict[componentName]))
             {
