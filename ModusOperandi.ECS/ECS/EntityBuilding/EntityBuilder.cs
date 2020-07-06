@@ -1,25 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
-using ModusOperandi.ECS.Utils.Extensions;
 
 namespace ModusOperandi.ECS.EntityBuilding
 {
     public static class EntityBuilder
     {
+        private static readonly List<Type> ComponentTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(t => t.GetTypes().Where(type => type.GetInterfaces().Contains(typeof(IComponent)))).ToList();
+
         public static Entity BuildEntity(Dictionary<object, object> dict, Scene scene)
         {
             var entity = scene.EntityManager.CreateEntity();
-            foreach (var component in from componentName in dict.Keys let cname = (((string) componentName) + "Component").ToLower() let componentType = AppDomain.CurrentDomain
-                .GetAssemblies()
-                .SelectMany(t => t.GetTypes()).First(t => t.Name.ToLower() == cname) where componentType != null select dict[componentName] == null
-                ? Activator.CreateInstance(componentType)
-                : Activator.CreateInstance(componentType, dict[componentName]))
-            {
+            foreach (var component in from componentName in dict.Keys
+                let cname = ((string) componentName + "Component").ToLower()
+                let componentType = ComponentTypes
+                    .FirstOrDefault(t => t.Name.ToLower() == cname)
+                where componentType != null
+                select dict[componentName] == null
+                    ? Activator.CreateInstance(componentType)
+                    : Activator.CreateInstance(componentType, dict[componentName]))
                 scene.AddComponentToEntity((dynamic) component, entity);
-            }
 
             return entity;
         }

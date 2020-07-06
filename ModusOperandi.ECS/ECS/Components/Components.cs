@@ -12,15 +12,12 @@ namespace ModusOperandi.ECS.Components
     {
         uint NumberOfInstances { get; }
         Entity[] Entities { get; }
-        Type ComponentType { get; }
     }
 
     public abstract class ComponentManager : IComponentManager
     {
-        public static Dictionary<Type, Type> ManagerType { get; } = new Dictionary<Type, Type>();
-        public uint NumberOfInstances { get; protected set; } = 1024;
-        public Entity[] Entities { get; } = new Entity[1024];
-        public Type ComponentType { get; protected set; }
+        public uint NumberOfInstances { get; protected set; } = 512;
+        public Entity[] Entities { get; } = new Entity[512];
         public abstract void AddComponent(IComponent component, uint index);
     }
 
@@ -28,13 +25,7 @@ namespace ModusOperandi.ECS.Components
     {
         private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
 
-        public ComponentManager()
-        {
-            ManagerType[typeof(T)] = GetType();
-            ComponentType = typeof(T);
-        }
-
-        public T[] ManagedComponents { get; } = new T[1024];
+        public T[] ManagedComponents { get; } = new T[512];
 
         public override void AddComponent(IComponent component, uint index)
         {
