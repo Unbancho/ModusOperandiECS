@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
@@ -12,22 +13,24 @@ namespace ModusOperandi.ECS.Systems
 
     public abstract class System<T> : ISystem where T : IComponent
     {
+        protected const int ArrayStartingSize = 1 << 9;
+
         protected System()
         {
-            ManagedEntities = SceneManager.GetComponentManager<T>().Entities
-                .Where(c => c.ID != 0).ToArray();
+            ManagedEntities = new Entity[ArrayStartingSize];
+            SceneManager.GetComponentManager<T>().Entities
+                .Where(c => c.ID != 0).ToArray().CopyTo(ManagedEntities, 0);
         }
 
-        public Entity[] ManagedEntities { get; protected set; }
+        protected Entity[] ManagedEntities;
 
         public virtual void Execute(float deltaTime, params object[] dependencies)
         {
-            for (uint i = 0; i < ManagedEntities.Length; i++)
+            Span<Entity> nonNullEntities = ManagedEntities;
+            nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default(Entity)));
+            for (int i = 0; i < nonNullEntities.Length; i++)
             {
-                var e = ManagedEntities[i];
-                if (e.IsNullEntity())
-                    break;
-                ActOnComponents(ManagedEntities[i].ID, i, deltaTime, dependencies);
+                ActOnComponents(nonNullEntities[i].ID, (uint)i, deltaTime, dependencies);
             }
         }
 
@@ -39,8 +42,10 @@ namespace ModusOperandi.ECS.Systems
     {
         protected System()
         {
-            ManagedEntities = ManagedEntities.Intersect(SceneManager.GetComponentManager<T2>().Entities
+            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T2>().Entities
                 .Where(c => c.ID != 0).ToArray()).ToArray();
+            ManagedEntities = new Entity[ArrayStartingSize];
+            arr.CopyTo(ManagedEntities, 0);
         }
     }
 
@@ -50,8 +55,10 @@ namespace ModusOperandi.ECS.Systems
     {
         protected System()
         {
-            ManagedEntities = ManagedEntities.Intersect(SceneManager.GetComponentManager<T3>().Entities
+            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T3>().Entities
                 .Where(c => c.ID != 0).ToArray()).ToArray();
+            ManagedEntities = new Entity[ArrayStartingSize];
+            arr.CopyTo(ManagedEntities, 0);
         }
     }
 
@@ -62,8 +69,10 @@ namespace ModusOperandi.ECS.Systems
     {
         protected System()
         {
-            ManagedEntities = ManagedEntities.Intersect(SceneManager.GetComponentManager<T4>().Entities
+            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T4>().Entities
                 .Where(c => c.ID != 0).ToArray()).ToArray();
+            ManagedEntities = new Entity[ArrayStartingSize];
+            arr.CopyTo(ManagedEntities, 0);
         }
     }
 }
