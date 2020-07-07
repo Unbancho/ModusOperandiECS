@@ -35,6 +35,11 @@ namespace ModusOperandi.ECS.Systems
         }
 
         protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);
+
+        protected ref TC Get<TC>(uint entity) where TC : IComponent
+        {
+            return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
+        }
     }
 
     public abstract class System<T, T2> : System<T> where T : IComponent
