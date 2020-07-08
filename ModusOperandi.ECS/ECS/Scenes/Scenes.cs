@@ -42,7 +42,6 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         public void AddComponentToEntity<T>(T component, Entity entity, params object[] componentParams)
-            where T : IComponent
         {
             var cm = SceneManager.GetComponentManager<T>();
             cm.Entities[entity.Index] = entity;

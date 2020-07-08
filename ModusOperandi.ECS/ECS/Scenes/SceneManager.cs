@@ -11,7 +11,7 @@ namespace ModusOperandi.ECS.Scenes
             CurrentScene = scene;
         }
 
-        public static ComponentManager<T> GetComponentManager<T>() where T : IComponent
+        public static ComponentManager<T> GetComponentManager<T>()
         {
             var componentManager = PerType<T>.ComponentManager;
             if (componentManager != null) return componentManager;
@@ -21,12 +21,12 @@ namespace ModusOperandi.ECS.Scenes
             return componentManager;
         }
 
-        private static void SetComponentManager<T>(ComponentManager<T> componentManager) where T : IComponent
+        private static void SetComponentManager<T>(ComponentManager<T> componentManager)
         {
             PerType<T>.ComponentManager = componentManager;
         }
 
-        private static class PerType<T> where T : IComponent
+        private static class PerType<T>
         {
             public static ComponentManager<T> ComponentManager;
         }

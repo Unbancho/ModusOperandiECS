@@ -9,8 +9,8 @@ namespace ModusOperandi.ECS.EntityBuilding
 {
     public static class EntityBuilder
     {
-        private static readonly List<Type> ComponentTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(t => t.GetTypes().Where(type => type.GetInterfaces().Contains(typeof(IComponent)))).ToList();
+        private static readonly Type[] ComponentTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(t => t.GetTypes().Where(type => Attribute.IsDefined(type, typeof(Component)))).ToArray();
 
         public static Entity BuildEntity(Dictionary<object, object> dict, Scene scene)
         {

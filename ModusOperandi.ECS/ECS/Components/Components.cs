@@ -4,7 +4,7 @@ using ModusOperandi.ECS.Entities;
 
 namespace ModusOperandi.ECS.Components
 {
-    public interface IComponent
+    public class Component : Attribute
     {
     }
 
@@ -18,28 +18,31 @@ namespace ModusOperandi.ECS.Components
     {
         public uint NumberOfInstances { get; protected set; } = 512;
         public Entity[] Entities { get; } = new Entity[512];
-        public abstract void AddComponent(IComponent component, uint index);
     }
 
-    public class ComponentManager<T> : ComponentManager where T : IComponent
+    public class ComponentManager<T> : ComponentManager
     {
         private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
 
         public T[] ManagedComponents { get; } = new T[512];
 
-        public override void AddComponent(IComponent component, uint index)
+        public uint AssignedComponents { get; set; } = 0;
+
+        public void AddComponent(T component, uint entity)
         {
-            ManagedComponents[index] = (T) component;
+            ManagedComponents[entity] = component;
+            AssignedComponents++;
+            _map[AssignedComponents-1] = entity;
         }
 
-        private static Instance MakeInstance(int i)
+        private static Instance MakeInstance(uint i)
         {
             return new Instance {i = i};
         }
 
-        private Instance LookUp(uint entity)
+        public Instance LookUp(uint entity)
         {
-            return MakeInstance((int) _map.GetValueOrDefault<uint, uint>(entity, 0));
+            return MakeInstance(_map.GetValueOrDefault<uint, uint>(entity, 0));
         }
 
         private void Destroy(uint i)
@@ -84,7 +87,7 @@ namespace ModusOperandi.ECS.Components
 
         public struct Instance
         {
-            public int i;
+            public uint i;
         }
     }
 }

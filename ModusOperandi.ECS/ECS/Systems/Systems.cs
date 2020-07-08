@@ -11,7 +11,7 @@ namespace ModusOperandi.ECS.Systems
         void Execute(float deltaTime = 0, params object[] dependencies);
     }
 
-    public abstract class System<T> : ISystem where T : IComponent
+    public abstract class System<T> : ISystem
     {
         protected const int ArrayStartingSize = 1 << 9;
 
@@ -24,26 +24,28 @@ namespace ModusOperandi.ECS.Systems
 
         protected Entity[] ManagedEntities;
 
-        public virtual void Execute(float deltaTime, params object[] dependencies)
+        public unsafe virtual void Execute(float deltaTime, params object[] dependencies)
         {
             Span<Entity> nonNullEntities = ManagedEntities;
             nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default(Entity)));
-            for (int i = 0; i < nonNullEntities.Length; i++)
+            fixed (Entity* entities = nonNullEntities)
             {
-                ActOnComponents(nonNullEntities[i].ID, (uint)i, deltaTime, dependencies);
+                for (int i = 0; i < nonNullEntities.Length; i++)
+                {
+                    ActOnComponents(entities[i].ID, (uint)i, deltaTime, dependencies);
+                }
             }
         }
 
         protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);
 
-        protected ref TC Get<TC>(uint entity) where TC : IComponent
+        protected ref TC Get<TC>(uint entity)
         {
             return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
         }
     }
 
-    public abstract class System<T, T2> : System<T> where T : IComponent
-        where T2 : IComponent
+    public abstract class System<T, T2> : System<T>
     {
         protected System()
         {
@@ -54,9 +56,7 @@ namespace ModusOperandi.ECS.Systems
         }
     }
 
-    public abstract class System<T, T2, T3> : System<T, T2> where T : IComponent
-        where T2 : IComponent
-        where T3 : IComponent
+    public abstract class System<T, T2, T3> : System<T, T2>
     {
         protected System()
         {
@@ -67,10 +67,7 @@ namespace ModusOperandi.ECS.Systems
         }
     }
 
-    public abstract class System<T, T2, T3, T4> : System<T, T2, T3> where T : IComponent
-        where T2 : IComponent
-        where T3 : IComponent
-        where T4 : IComponent
+    public abstract class System<T, T2, T3, T4> : System<T, T2, T3>
     {
         protected System()
         {
