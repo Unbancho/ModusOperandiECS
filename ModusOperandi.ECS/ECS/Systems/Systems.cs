@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Linq;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
@@ -8,7 +9,7 @@ namespace ModusOperandi.ECS.Systems
 {
     public interface ISystem
     {
-        void Execute(float deltaTime = 0, params object[] dependencies);
+        void Execute(float deltaTime = 0, bool parallel = true, params object[] dependencies);
     }
 
     public abstract class System<T> : ISystem
@@ -24,17 +25,21 @@ namespace ModusOperandi.ECS.Systems
 
         protected Entity[] ManagedEntities;
 
-        public unsafe virtual void Execute(float deltaTime, params object[] dependencies)
+        public unsafe virtual void Execute(float deltaTime, bool parallel=true, params object[] dependencies)
         {
             Span<Entity> nonNullEntities = ManagedEntities;
             nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default(Entity)));
-            fixed (Entity* entities = nonNullEntities)
-            {
+            Entity[] entities = nonNullEntities.ToArray();
+            if(parallel)
+                Parallel.For(0, entities.Length, i =>
+                {
+                    ActOnComponents(entities[i].ID, (uint)i, deltaTime, dependencies);
+                });
+            else
                 for (int i = 0; i < nonNullEntities.Length; i++)
                 {
                     ActOnComponents(entities[i].ID, (uint)i, deltaTime, dependencies);
-                }
-            }
+                }            
         }
 
         protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);

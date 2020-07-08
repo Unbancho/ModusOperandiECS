@@ -32,7 +32,7 @@ namespace ModusOperandi.ECS.Scenes
 
         public void Draw(RenderTarget target, RenderStates states)
         {
-            foreach (var system in DrawSystems) system.Execute(0, target, states);
+            foreach (var system in DrawSystems) system.Execute(0, false, target, states);
         }
 
         protected void PlaceEntities(string folder = null)
@@ -50,7 +50,7 @@ namespace ModusOperandi.ECS.Scenes
 
         public virtual void Initialize()
         {
-            foreach (var system in InitializeSystems) system.Execute();
+            foreach (var system in InitializeSystems) system.Execute(parallel:false);
         }
 
         public virtual void Update(float deltaTime)
