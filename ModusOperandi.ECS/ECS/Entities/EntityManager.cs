@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
+using JetBrains.Annotations;
 
 namespace ModusOperandi.ECS.Entities
 {
+    [PublicAPI]
     public class EntityManager
     {
         private const uint MinimumFreeIndices = 1024;

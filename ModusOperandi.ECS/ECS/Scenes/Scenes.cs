@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using ModusOperandi.ECS.Components;
+using System.Reflection;
+using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
@@ -11,9 +11,10 @@ using SFML.Graphics;
 
 namespace ModusOperandi.ECS.Scenes
 {
-    public class Scene : Drawable
+    [PublicAPI]
+    public abstract class Scene : Drawable
     {
-        public Scene()
+        protected Scene()
         {
             Name = GetType().Name;
             EntityManager = new EntityManager();
@@ -23,25 +24,22 @@ namespace ModusOperandi.ECS.Scenes
         public string Name { get; }
         protected string ResourcesFolder { get; set; }
         public List<Entity> Entities { get; } = new List<Entity>();
-        protected List<ISystem> Systems => InitializeSystems.Concat(UpdateSystems).Concat(DrawSystems).ToList();
-        protected List<ISystem> UpdateSystems { get; } = new List<ISystem>();
-        protected List<ISystem> InitializeSystems { get; } = new List<ISystem>();
-        protected List<ISystem> DrawSystems { get; } = new List<ISystem>();
         public EntityManager EntityManager { get; set; }
 
 
-        public void Draw(RenderTarget target, RenderStates states)
+        // TODO: Make good lol.
+        public virtual void Draw(RenderTarget target, RenderStates states)
         {
-            foreach (var system in DrawSystems) system.Execute(0, false, target, states);
+            foreach (var system in GetSystems<DrawSystemAttribute>()) system.Execute(0, false, target, states);
         }
 
         protected void PlaceEntities(string folder = null)
         {
             var files = Directory.GetFiles(folder ?? ResourcesFolder, "*.yaml");
-            foreach (var file in files) EntityBuilder.BuildEntity(YAML.Deserialize<object, object>(file), this);
+            foreach (var file in files) EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
         }
 
-        public void AddComponentToEntity<T>(T component, Entity entity, params object[] componentParams)
+        public virtual void AddComponentToEntity<T>(T component, Entity entity, params object[] componentParams)
         {
             var cm = SceneManager.GetComponentManager<T>();
             cm.Entities[entity.Index] = entity;
@@ -50,12 +48,49 @@ namespace ModusOperandi.ECS.Scenes
 
         public virtual void Initialize()
         {
-            foreach (var system in InitializeSystems) system.Execute(parallel:false);
+            // TODO: Do something.
         }
 
         public virtual void Update(float deltaTime)
         {
-            foreach (var system in UpdateSystems) system.Execute(deltaTime);
+            foreach (var system in GetSystems<UpdateSystemAttribute>()) system.Execute(deltaTime);
+        }
+
+        // TODO: Auto-sort based on dependencies.
+        public void StartSystem<T>() where T : ISystem, new()
+        {
+            var system = new T();
+            var groupType = system.GetType().GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
+            if (groupType == null)
+                groupType = typeof(UpdateSystemAttribute);
+            GetSystems((dynamic) Activator.CreateInstance(groupType)).Add(system);
+        }
+
+        public void StopSystem<T>() where T : ISystem
+        {
+            var groupType = typeof(T).GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
+            var systemsList = GetSystems((dynamic) Activator.CreateInstance(groupType));
+            foreach (var system in systemsList)
+            {
+                if (system.GetType() != typeof(T)) continue;
+                systemsList.Remove(system);
+                return;
+            }
+        }
+
+        public static List<ISystem> GetSystems<T>()
+        {
+            return PerType<T>.Systems;
+        }
+
+        public static List<ISystem> GetSystems<T>(T _)
+        {
+            return GetSystems<T>();
+        }
+
+        private static class PerType<T>
+        {
+            public static readonly List<ISystem> Systems = new List<ISystem>();
         }
     }
 }

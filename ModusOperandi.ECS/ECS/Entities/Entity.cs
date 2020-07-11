@@ -1,5 +1,8 @@
+using JetBrains.Annotations;
+
 namespace ModusOperandi.ECS.Entities
 {
+    [PublicAPI]
     public struct Entity
     {
         public static implicit operator uint(Entity entity)
@@ -17,6 +20,7 @@ namespace ModusOperandi.ECS.Entities
         public uint Generation => (ID >> EntityIndexBits) & EntityGenerationMask;
     }
 
+    [PublicAPI]
     public static class EntityExtensions
     {
         public static bool IsNullEntity(this Entity entity)

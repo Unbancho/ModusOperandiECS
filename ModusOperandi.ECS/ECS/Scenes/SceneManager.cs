@@ -1,7 +1,9 @@
+using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 
 namespace ModusOperandi.ECS.Scenes
 {
+    [PublicAPI]
     public static class SceneManager
     {
         public static Scene CurrentScene { get; set; }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
 
 namespace ModusOperandi.ECS.Components
@@ -8,36 +9,44 @@ namespace ModusOperandi.ECS.Components
     {
     }
 
+    [PublicAPI]
     public interface IComponentManager
     {
         uint NumberOfInstances { get; }
         Entity[] Entities { get; }
     }
 
+    [PublicAPI]
     public abstract class ComponentManager : IComponentManager
     {
         public uint NumberOfInstances { get; protected set; } = 512;
         public Entity[] Entities { get; } = new Entity[512];
     }
 
+    [PublicAPI]
     public class ComponentManager<T> : ComponentManager
     {
         private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
 
-        public T[] ManagedComponents { get; } = new T[512];
+        public ComponentManager()
+        {
+            ManagedComponents = new T[Entities.Length];
+        }
 
-        public uint AssignedComponents { get; set; } = 0;
+        public T[] ManagedComponents { get; }
+
+        public uint AssignedComponents { get; set; }
 
         public void AddComponent(T component, uint entity)
         {
             ManagedComponents[entity] = component;
             AssignedComponents++;
-            _map[AssignedComponents-1] = entity;
+            _map[AssignedComponents - 1] = entity;
         }
 
         private static Instance MakeInstance(uint i)
         {
-            return new Instance {i = i};
+            return new Instance {I = i};
         }
 
         public Instance LookUp(uint entity)
@@ -87,7 +96,7 @@ namespace ModusOperandi.ECS.Components
 
         public struct Instance
         {
-            public uint i;
+            public uint I;
         }
     }
 }

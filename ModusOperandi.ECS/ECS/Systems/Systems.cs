@@ -1,45 +1,52 @@
 using System;
-using System.Threading.Tasks;
 using System.Linq;
-using ModusOperandi.ECS.Components;
+using System.Threading.Tasks;
+using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS.Systems
 {
+    [PublicAPI]
+    public class SystemAttribute : Attribute
+    {
+        public SystemAttribute(params Type[] systemDependencies)
+        {
+            SystemDependencies = systemDependencies;
+        }
+
+        public Type[] SystemDependencies { get; }
+    }
+
     public interface ISystem
     {
         void Execute(float deltaTime = 0, bool parallel = true, params object[] dependencies);
     }
 
+    [PublicAPI]
     public abstract class System<T> : ISystem
     {
         protected const int ArrayStartingSize = 1 << 9;
 
+        protected Entity[] ManagedEntities;
+
         protected System()
         {
             ManagedEntities = new Entity[ArrayStartingSize];
-            SceneManager.GetComponentManager<T>().Entities
-                .Where(c => c.ID != 0).ToArray().CopyTo(ManagedEntities, 0);
+            SceneManager.GetComponentManager<T>().Entities.Where(c => c.ID != 0).ToArray().CopyTo(ManagedEntities, 0);
         }
 
-        protected Entity[] ManagedEntities;
-
-        public unsafe virtual void Execute(float deltaTime, bool parallel=true, params object[] dependencies)
+        public virtual void Execute(float deltaTime, bool parallel = true, params object[] dependencies)
         {
             Span<Entity> nonNullEntities = ManagedEntities;
-            nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default(Entity)));
-            Entity[] entities = nonNullEntities.ToArray();
-            if(parallel)
-                Parallel.For(0, entities.Length, i =>
-                {
-                    ActOnComponents(entities[i].ID, (uint)i, deltaTime, dependencies);
-                });
+            nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default));
+            var entities = nonNullEntities.ToArray();
+            if (parallel)
+                Parallel.For(0, entities.Length,
+                    i => { ActOnComponents(entities[i].ID, (uint) i, deltaTime, dependencies); });
             else
-                for (int i = 0; i < nonNullEntities.Length; i++)
-                {
-                    ActOnComponents(entities[i].ID, (uint)i, deltaTime, dependencies);
-                }            
+                for (var i = 0; i < nonNullEntities.Length; i++)
+                    ActOnComponents(entities[i].ID, (uint) i, deltaTime, dependencies);
         }
 
         protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);
@@ -81,5 +88,17 @@ namespace ModusOperandi.ECS.Systems
             ManagedEntities = new Entity[ArrayStartingSize];
             arr.CopyTo(ManagedEntities, 0);
         }
+    }
+
+    public abstract class SystemGroupAttribute : Attribute
+    {
+    }
+
+    public class UpdateSystemAttribute : SystemGroupAttribute
+    {
+    }
+
+    public class DrawSystemAttribute : SystemGroupAttribute
+    {
     }
 }

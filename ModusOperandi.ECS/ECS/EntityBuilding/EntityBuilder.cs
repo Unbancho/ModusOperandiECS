@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS.EntityBuilding
 {
+    [PublicAPI]
     public static class EntityBuilder
     {
         private static readonly Type[] ComponentTypes = AppDomain.CurrentDomain.GetAssemblies()
@@ -16,7 +18,7 @@ namespace ModusOperandi.ECS.EntityBuilding
         {
             var entity = scene.EntityManager.CreateEntity();
             foreach (var component in from componentName in dict.Keys
-                let cname = ((string) componentName + "Component").ToLower()
+                let cname = $"{componentName}Component".ToLower()
                 let componentType = ComponentTypes
                     .FirstOrDefault(t => t.Name.ToLower() == cname)
                 where componentType != null
