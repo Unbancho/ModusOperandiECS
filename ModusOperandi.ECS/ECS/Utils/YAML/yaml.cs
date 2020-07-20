@@ -1,20 +1,26 @@
 using System.Collections.Generic;
 using System.IO;
-using SFML.Graphics;
-using SFML.System;
+using JetBrains.Annotations;
 using YamlDotNet.Serialization;
 
 namespace ModusOperandi.Utils.YAML
 {
+    [PublicAPI]
     public static class Yaml
     {
-        // TODO: Remove some of these tags, shouldn't exist by default.
-        private static readonly IDeserializer Deserializer = new DeserializerBuilder()
-            .WithTagMapping("!vector2f", typeof(Vector2f))
-            .WithTagMapping("!text", typeof(Text))
-            .WithTagMapping("!color", typeof(Color))
-            .WithTagMapping("!style", typeof(Text.Styles))
-            .Build();
+        private static readonly DeserializerBuilder DeserializerBuilder= new DeserializerBuilder();
+        
+        private static IDeserializer _deserializer;
+        
+        public static void RegisterTagMapping<T>(string tag)
+        {
+            DeserializerBuilder.WithTagMapping(tag, typeof(T));
+        }
+        
+        public static void BuildDeserializer()
+        {
+            _deserializer = DeserializerBuilder.Build();
+        }
 
         public static Dictionary<TK, TV> Deserialize<TK, TV>(string filepath)
         {
@@ -24,7 +30,7 @@ namespace ModusOperandi.Utils.YAML
                 data = sr.ReadToEnd();
             }
 
-            return Deserializer.Deserialize<Dictionary<TK, TV>>(data);
+            return _deserializer.Deserialize<Dictionary<TK, TV>>(data);
         }
     }
 }

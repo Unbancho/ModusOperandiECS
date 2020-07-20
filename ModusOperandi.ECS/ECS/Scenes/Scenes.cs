@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
@@ -18,11 +17,9 @@ namespace ModusOperandi.ECS.Scenes
         {
             Name = GetType().Name;
             EntityManager = new EntityManager();
-            ResourcesFolder = $"{AppDomain.CurrentDomain.BaseDirectory}/Resources/{Name}";
         }
 
         public string Name { get; }
-        protected string ResourcesFolder { get; set; }
         public List<Entity> Entities { get; } = new List<Entity>();
         public EntityManager EntityManager { get; set; }
 
@@ -33,13 +30,13 @@ namespace ModusOperandi.ECS.Scenes
             foreach (var system in GetSystems<DrawSystemAttribute>()) system.Execute(0, false, target, states);
         }
 
-        protected void PlaceEntities(string folder = null)
+        protected Entity PlaceEntity(string type)
         {
-            var files = Directory.GetFiles(folder ?? ResourcesFolder, "*.yaml");
-            foreach (var file in files) EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
+            var file = $"{AppDomain.CurrentDomain.BaseDirectory}/Resources/Entities/{type}.yaml";
+            return EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
         }
 
-        public virtual void AddComponentToEntity<T>(T component, Entity entity, params object[] componentParams)
+        public virtual void AddComponentToEntity<T>(T component, Entity entity, params object[] componentParams) where T: unmanaged
         {
             var cm = SceneManager.GetComponentManager<T>();
             cm.Entities[entity.Index] = entity;
@@ -57,13 +54,15 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         // TODO: Auto-sort based on dependencies.
-        public void StartSystem<T>() where T : ISystem, new()
+        public T StartSystem<T>() where T : ISystem, new()
         {
             var system = new T();
             var groupType = system.GetType().GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
             if (groupType == null)
                 groupType = typeof(UpdateSystemAttribute);
             GetSystems((dynamic) Activator.CreateInstance(groupType)).Add(system);
+            _allSystems.Add(system);
+            return system;
         }
 
         public void StopSystem<T>() where T : ISystem
@@ -76,6 +75,17 @@ namespace ModusOperandi.ECS.Scenes
                 systemsList.Remove(system);
                 return;
             }
+        }
+        
+        public void StopSystem<T>(T _) where T : ISystem
+        {
+            StopSystem<T>();
+        }
+
+        private List<ISystem> _allSystems = new List<ISystem>();
+        public List<ISystem> GetAllSystems()
+        {
+            return _allSystems;
         }
 
         public static List<ISystem> GetSystems<T>()

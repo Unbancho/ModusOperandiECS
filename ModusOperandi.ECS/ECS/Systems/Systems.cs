@@ -24,7 +24,7 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class System<T> : ISystem
+    public abstract class System<T> : ISystem where T: unmanaged
     {
         protected const int ArrayStartingSize = 1 << 9;
 
@@ -48,16 +48,16 @@ namespace ModusOperandi.ECS.Systems
                 for (var i = 0; i < nonNullEntities.Length; i++)
                     ActOnComponents(entities[i].ID, (uint) i, deltaTime, dependencies);
         }
-
+        
         protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);
 
-        protected ref TC Get<TC>(uint entity)
+        protected ref TC Get<TC>(uint entity) where TC: unmanaged
         {
             return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
         }
     }
 
-    public abstract class System<T, T2> : System<T>
+    public abstract class System<T, T2> : System<T> where T: unmanaged where T2: unmanaged
     {
         protected System()
         {
@@ -68,7 +68,7 @@ namespace ModusOperandi.ECS.Systems
         }
     }
 
-    public abstract class System<T, T2, T3> : System<T, T2>
+    public abstract class System<T, T2, T3> : System<T, T2> where T: unmanaged where T2: unmanaged where T3: unmanaged
     {
         protected System()
         {
@@ -79,7 +79,7 @@ namespace ModusOperandi.ECS.Systems
         }
     }
 
-    public abstract class System<T, T2, T3, T4> : System<T, T2, T3>
+    public abstract class System<T, T2, T3, T4> : System<T, T2, T3> where T: unmanaged where T4: unmanaged where T2: unmanaged where T3: unmanaged
     {
         protected System()
         {
@@ -90,14 +90,17 @@ namespace ModusOperandi.ECS.Systems
         }
     }
 
+    [PublicAPI]
     public abstract class SystemGroupAttribute : Attribute
     {
     }
 
+    [PublicAPI]
     public class UpdateSystemAttribute : SystemGroupAttribute
     {
     }
 
+    [PublicAPI]
     public class DrawSystemAttribute : SystemGroupAttribute
     {
     }

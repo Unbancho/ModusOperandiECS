@@ -23,13 +23,21 @@ namespace ModusOperandi.ECS.Components
         public Entity[] Entities { get; } = new Entity[512];
     }
 
-    [PublicAPI]
-    public class ComponentManager<T> : ComponentManager
+    internal static class SignatureCounter
     {
+        public static int Counter = 0;
+    }
+
+    [PublicAPI]
+    public class ComponentManager<T> : ComponentManager where T : unmanaged
+    {
+        public static ulong Signature { get; private set; }
+        
         private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
 
         public ComponentManager()
         {
+            Signature = (ulong) 1 << SignatureCounter.Counter++;
             ManagedComponents = new T[Entities.Length];
         }
 
@@ -44,14 +52,9 @@ namespace ModusOperandi.ECS.Components
             _map[AssignedComponents - 1] = entity;
         }
 
-        private static Instance MakeInstance(uint i)
+        public uint LookUp(uint entity)
         {
-            return new Instance {I = i};
-        }
-
-        public Instance LookUp(uint entity)
-        {
-            return MakeInstance(_map.GetValueOrDefault<uint, uint>(entity, 0));
+            return _map.GetValueOrDefault<uint, uint>(entity, 0);
         }
 
         private void Destroy(uint i)
@@ -92,11 +95,6 @@ namespace ModusOperandi.ECS.Components
         public ref T GetComponent(uint entity)
         {
             return ref ManagedComponents[entity];
-        }
-
-        public struct Instance
-        {
-            public uint I;
         }
     }
 }
