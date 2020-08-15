@@ -11,7 +11,6 @@
     <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2020.2.0-eap" />
     <PackageReference Include="SFML.Net" Version="2.5.0" />
-    <PackageReference Include="System.Drawing.Common" Version="5.0.0-preview.1.20120.5" />
     <PackageReference Include="YamlDotNet" Version="8.1.2" />
   </ItemGroup>
 

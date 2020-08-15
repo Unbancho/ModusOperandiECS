@@ -8,15 +8,16 @@ namespace ModusOperandi.Utils.YAML
     [PublicAPI]
     public static class Yaml
     {
-        private static readonly DeserializerBuilder DeserializerBuilder= new DeserializerBuilder();
-        
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
+        private static readonly DeserializerBuilder DeserializerBuilder = new DeserializerBuilder();
+
         private static IDeserializer _deserializer;
-        
+
         public static void RegisterTagMapping<T>(string tag)
         {
             DeserializerBuilder.WithTagMapping(tag, typeof(T));
         }
-        
+
         public static void BuildDeserializer()
         {
             _deserializer = DeserializerBuilder.Build();
@@ -25,6 +26,7 @@ namespace ModusOperandi.Utils.YAML
         public static Dictionary<TK, TV> Deserialize<TK, TV>(string filepath)
         {
             string data;
+            // ReSharper disable once HeapView.ObjectAllocation.Evident
             using (var sr = new StreamReader(filepath))
             {
                 data = sr.ReadToEnd();

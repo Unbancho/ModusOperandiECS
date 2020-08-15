@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS.Entities
 {
@@ -25,10 +26,12 @@ namespace ModusOperandi.ECS.Entities
                 index = (uint) _generation.Count; // Removed -1 to have 0 be null
             }
 
-            return new Entity
+            var entity = new Entity
             {
                 ID = index
             };
+            SceneManager.ComponentArrays[0][entity.Index] = entity;
+            return entity;
         }
 
         public bool IsEntityAlive(Entity entity)

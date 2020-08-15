@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
 
@@ -18,75 +19,69 @@ namespace ModusOperandi.ECS.Systems
         public Type[] SystemDependencies { get; }
     }
 
+    [PublicAPI]
     public interface ISystem
     {
-        void Execute(float deltaTime = 0, bool parallel = true, params object[] dependencies);
+        void Execute(float deltaTime = 0, bool parallel = true, Scene.Context context = default);
     }
 
     [PublicAPI]
-    public abstract class System<T> : ISystem where T: unmanaged
+    public abstract class System : ISystem
     {
-        protected const int ArrayStartingSize = 1 << 9;
+        public Archetype Archetype { get; }
 
-        protected Entity[] ManagedEntities;
-
-        protected System()
+        protected System(Archetype archetype)
         {
-            ManagedEntities = new Entity[ArrayStartingSize];
-            SceneManager.GetComponentManager<T>().Entities.Where(c => c.ID != 0).ToArray().CopyTo(ManagedEntities, 0);
+            Archetype = archetype;
+            SceneManager.ArchetypeEntityDictionary[Archetype] = SceneManager.Query(Archetype).ToArray();
         }
 
-        public virtual void Execute(float deltaTime, bool parallel = true, params object[] dependencies)
+        public virtual void Execute(float deltaTime, bool parallel = true, Scene.Context context = default)
         {
-            Span<Entity> nonNullEntities = ManagedEntities;
-            nonNullEntities = nonNullEntities.Slice(0, Array.IndexOf(ManagedEntities, default));
-            var entities = nonNullEntities.ToArray();
             if (parallel)
-                Parallel.For(0, entities.Length,
-                    i => { ActOnComponents(entities[i].ID, (uint) i, deltaTime, dependencies); });
+                ParallelExecute(deltaTime, context);
             else
-                for (var i = 0; i < nonNullEntities.Length; i++)
-                    ActOnComponents(entities[i].ID, (uint) i, deltaTime, dependencies);
+            {
+                var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
+                for (var i = 0; i < entities.Length; i++)
+                    ActOnComponents(entities[i].ID, (uint) i, deltaTime, context);
+            }
+
         }
         
-        protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, params object[] dependencies);
+        private void ParallelExecute(float deltaTime, Scene.Context context)
+        {
+            var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
+            
+            var degreeOfParallelism = Environment.ProcessorCount;
 
-        protected ref TC Get<TC>(uint entity) where TC: unmanaged
+            var tasks = new Task[degreeOfParallelism];
+
+            for (var taskNumber = 0; taskNumber < degreeOfParallelism; taskNumber++)
+            {
+                var taskNumberCopy = taskNumber;
+
+                tasks[taskNumber] = Task.Factory.StartNew(
+                    () =>
+                    {
+                        var max = entities.Length * (taskNumberCopy + 1) / degreeOfParallelism;
+                        for (var i = entities.Length * taskNumberCopy / degreeOfParallelism;
+                            i < max;
+                            i++)
+                        {
+                            ActOnComponents(entities[i].ID, (uint) i, deltaTime, context);
+                        }
+                    });
+            }
+
+            Task.WaitAll(tasks);
+        }
+
+        protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, Scene.Context context);
+
+        protected ref TC Get<TC>(uint entity) where TC : unmanaged
         {
             return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
-        }
-    }
-
-    public abstract class System<T, T2> : System<T> where T: unmanaged where T2: unmanaged
-    {
-        protected System()
-        {
-            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T2>().Entities
-                .Where(c => c.ID != 0).ToArray()).ToArray();
-            ManagedEntities = new Entity[ArrayStartingSize];
-            arr.CopyTo(ManagedEntities, 0);
-        }
-    }
-
-    public abstract class System<T, T2, T3> : System<T, T2> where T: unmanaged where T2: unmanaged where T3: unmanaged
-    {
-        protected System()
-        {
-            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T3>().Entities
-                .Where(c => c.ID != 0).ToArray()).ToArray();
-            ManagedEntities = new Entity[ArrayStartingSize];
-            arr.CopyTo(ManagedEntities, 0);
-        }
-    }
-
-    public abstract class System<T, T2, T3, T4> : System<T, T2, T3> where T: unmanaged where T4: unmanaged where T2: unmanaged where T3: unmanaged
-    {
-        protected System()
-        {
-            var arr = ManagedEntities.Intersect(SceneManager.GetComponentManager<T4>().Entities
-                .Where(c => c.ID != 0).ToArray()).ToArray();
-            ManagedEntities = new Entity[ArrayStartingSize];
-            arr.CopyTo(ManagedEntities, 0);
         }
     }
 

@@ -25,15 +25,16 @@ namespace ModusOperandi.ECS.EntityBuilding
                 select dict[componentName] == null
                     ? Activator.CreateInstance(componentType)
                     : Activator.CreateInstance(componentType, ExtractParameters(dict[componentName])))
+            {
                 scene.AddComponentToEntity((dynamic) component, entity);
-
+            }
             return entity;
         }
-        
+
         private static object[] ExtractParameters(object key)
         {
             var parameters = (key as List<object>)?.ToArray();
-            return parameters ?? new object[]{key};
+            return parameters ?? new[] {key};
         }
     }
 }
