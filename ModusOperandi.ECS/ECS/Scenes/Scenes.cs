@@ -6,6 +6,7 @@ using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
+using ModusOperandi.Rendering;
 using ModusOperandi.Utils.YAML;
 using SFML.Graphics;
 
@@ -31,13 +32,13 @@ namespace ModusOperandi.ECS.Scenes
             public RenderStates States;
         }
 
-        private Context _context = default;
-        
         public virtual void Draw(RenderTarget target, RenderStates states)
         {
-            _context.Target = target;
-            _context.States = states;
-            foreach (var system in GetSystems<DrawSystemAttribute>()) system.Execute(0, false, _context);
+            var spriteBatch = new SpriteBatch();
+            spriteBatch.Begin();
+            foreach (var system in GetSystems<DrawSystemAttribute>()) ((IDrawSystem)system).Draw(spriteBatch);
+            spriteBatch.End();
+            spriteBatch.Draw(target, states);
         }
         
         protected Entity PlaceEntity(string type)
@@ -59,7 +60,7 @@ namespace ModusOperandi.ECS.Scenes
 
         public virtual void Update(float deltaTime)
         {
-            foreach (var system in GetSystems<UpdateSystemAttribute>()) system.Execute(deltaTime);
+            foreach (var system in GetSystems<UpdateSystemAttribute>()) ((IUpdateSystem)system).Execute(deltaTime);
         }
 
         // TODO: Auto-sort based on dependencies.
@@ -87,7 +88,7 @@ namespace ModusOperandi.ECS.Scenes
             }
         }
 
-        public void ToggleSystem<T>() where T : Systems.System, new()
+        public void ToggleSystem<T>() where T : Systems.UpdateSystem, new()
         {
             var groupType = typeof(T).GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
             if (groupType == null) return;
@@ -102,7 +103,7 @@ namespace ModusOperandi.ECS.Scenes
             StartSystem<T>();
         }
 
-        public void StopSystem<T>(T _) where T : Systems.System
+        public void StopSystem<T>(T _) where T : Systems.UpdateSystem
         {
             StopSystem<T>();
         }

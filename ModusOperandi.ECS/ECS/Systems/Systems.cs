@@ -5,6 +5,7 @@ using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
+using ModusOperandi.Rendering;
 
 namespace ModusOperandi.ECS.Systems
 {
@@ -20,13 +21,19 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public interface ISystem
+    public interface IUpdateSystem
     {
-        void Execute(float deltaTime = 0, bool parallel = true, Scene.Context context = default);
+        void Execute(float deltaTime = 0, bool parallel = true, SpriteBatch spriteBatch = null);
     }
 
     [PublicAPI]
-    public abstract class System : ISystem
+    public interface IDrawSystem
+    {
+        void Draw(SpriteBatch spriteBatch);
+    }
+
+    [PublicAPI]
+    public abstract class System
     {
         public Archetype Archetype { get; }
 
@@ -36,20 +43,34 @@ namespace ModusOperandi.ECS.Systems
             SceneManager.ArchetypeEntityDictionary[Archetype] = SceneManager.Query(Archetype).ToArray();
         }
 
-        public virtual void Execute(float deltaTime, bool parallel = true, Scene.Context context = default)
+        protected ref TC Get<TC>(uint entity) where TC : unmanaged
+        {
+            return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
+        }
+    }
+    
+    public abstract class UpdateSystem : System, IUpdateSystem
+    {
+        protected abstract void ActOnComponents(uint entity, float deltaTime);
+
+        protected UpdateSystem(Archetype archetype) : base(archetype)
+        {
+        }
+        
+        public virtual void Execute(float deltaTime, bool parallel = true, SpriteBatch spriteBatch = null)
         {
             if (parallel)
-                ParallelExecute(deltaTime, context);
+                ParallelExecute(deltaTime);
             else
             {
                 var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
                 for (var i = 0; i < entities.Length; i++)
-                    ActOnComponents(entities[i].ID, (uint) i, deltaTime, context);
+                    ActOnComponents(entities[i].ID, deltaTime);
             }
 
         }
         
-        private void ParallelExecute(float deltaTime, Scene.Context context)
+        private void ParallelExecute(float deltaTime)
         {
             var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
             
@@ -69,19 +90,12 @@ namespace ModusOperandi.ECS.Systems
                             i < max;
                             i++)
                         {
-                            ActOnComponents(entities[i].ID, (uint) i, deltaTime, context);
+                            ActOnComponents(entities[i].ID, deltaTime);
                         }
                     });
             }
 
             Task.WaitAll(tasks);
-        }
-
-        protected abstract void ActOnComponents(uint entity, uint index, float deltaTime, Scene.Context context);
-
-        protected ref TC Get<TC>(uint entity) where TC : unmanaged
-        {
-            return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
         }
     }
 
