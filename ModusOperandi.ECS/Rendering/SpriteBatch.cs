@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using JetBrains.Annotations;
 using SFML.Graphics;
 using SFML.System;
 
 namespace ModusOperandi.Rendering
 {
+    [PublicAPI]
     public class SpriteBatch : Drawable
     {
         private struct QueueItem
@@ -13,6 +15,7 @@ namespace ModusOperandi.Rendering
             public Texture Texture;
         }
 
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
         private readonly List<QueueItem> _textures = new List<QueueItem>();
 
         private readonly int _max;
@@ -24,6 +27,7 @@ namespace ModusOperandi.Rendering
             _max = maxCapacity * 4;
         }
 
+        // ReSharper disable once HeapView.ObjectAllocation.Evident
         private Vertex[] _vertices = new Vertex[100 * 4];
         private Texture _activeTexture;
         private uint _queueCount;

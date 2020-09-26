@@ -5,6 +5,11 @@ VisualStudioVersion = 16.0.29806.167
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ModusOperandi.ECS", "ModusOperandi.ECS.csproj", "{14FD2808-68A3-41C3-B034-A7773B05AEC4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E546DB87-F129-4687-83F7-5B74BA0C8F0A}"
+	ProjectSection(SolutionItems) = preProject
+		globals.json = globals.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

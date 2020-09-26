@@ -1,10 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
+using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
-using ModusOperandi.ECS.Scenes;
 using ModusOperandi.Rendering;
 
 namespace ModusOperandi.ECS.Systems
@@ -19,84 +20,133 @@ namespace ModusOperandi.ECS.Systems
 
         public Type[] SystemDependencies { get; }
     }
-
+    
     [PublicAPI]
-    public interface IUpdateSystem
+    public interface ISystem
     {
-        void Execute(float deltaTime = 0, bool parallel = true, SpriteBatch spriteBatch = null);
+        List<ISystem> ComplementarySystems { get; }
+        bool Parallel { get; set; }
     }
 
     [PublicAPI]
-    public interface IDrawSystem
+    public interface IEntitySystem : ISystem
+    {
+        Archetype Archetype { get; }
+    }
+
+    [PublicAPI]
+    public interface IComponentSystem<T> : ISystem where T : unmanaged
+    {
+        Span<T> Components { get; }
+    }
+
+    [PublicAPI]
+    public interface IUpdateSystem : ISystem
+    {
+        void Execute(float deltaTime);
+    }
+
+    [PublicAPI]
+    public interface IDrawSystem : ISystem
     {
         void Draw(SpriteBatch spriteBatch);
     }
 
     [PublicAPI]
-    public abstract class System
+    public abstract class UpdateEntitySystem : IEntitySystem, IUpdateSystem
     {
         public Archetype Archetype { get; }
+        public List<ISystem> ComplementarySystems { get; } = new ();
+        public bool Parallel { get; set; } = true;
+        
+        
+        protected abstract void ActOnEntity(uint entity, float deltaTime);
 
-        protected System(Archetype archetype)
+        protected UpdateEntitySystem(Archetype archetype)
         {
             Archetype = archetype;
-            SceneManager.ArchetypeEntityDictionary[Archetype] = SceneManager.Query(Archetype).ToArray();
-        }
-
-        protected ref TC Get<TC>(uint entity) where TC : unmanaged
-        {
-            return ref SceneManager.GetComponentManager<TC>().GetComponent(entity);
-        }
-    }
-    
-    public abstract class UpdateSystem : System, IUpdateSystem
-    {
-        protected abstract void ActOnComponents(uint entity, float deltaTime);
-
-        protected UpdateSystem(Archetype archetype) : base(archetype)
-        {
+            // ReSharper disable once HeapView.ObjectAllocation
+            Ecs.ArchetypeEntityDictionary[Archetype.Signature] = Ecs.Query(Archetype).ToArray();
         }
         
-        public virtual void Execute(float deltaTime, bool parallel = true, SpriteBatch spriteBatch = null)
+        public virtual void Execute(float deltaTime)
         {
-            if (parallel)
-                ParallelExecute(deltaTime);
+            var entities = Ecs.ArchetypeEntityDictionary[Archetype.Signature];
+            if (Parallel)
+                ActOnEntitiesParallel(deltaTime, entities);
             else
-            {
-                var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
-                for (var i = 0; i < entities.Length; i++)
-                    ActOnComponents(entities[i].ID, deltaTime);
-            }
+                ActOnEntities(deltaTime, entities);
+        }
 
+        private void ActOnEntities(float deltaTime, Entity[] entities)
+        {
+            for (var i = 0; i < entities.Length; i++)
+                ActOnEntity(entities[i].ID, deltaTime);
         }
         
-        private void ParallelExecute(float deltaTime)
+        // ReSharper disable once HeapView.ClosureAllocation
+        private void ActOnEntitiesParallel(float deltaTime, Entity[] entities)
         {
-            var entities = SceneManager.ArchetypeEntityDictionary[Archetype];
-            
             var degreeOfParallelism = Environment.ProcessorCount;
-
+            // ReSharper disable once HeapView.ObjectAllocation.Evident
             var tasks = new Task[degreeOfParallelism];
-
             for (var taskNumber = 0; taskNumber < degreeOfParallelism; taskNumber++)
             {
+                // ReSharper disable once HeapView.ClosureAllocation
                 var taskNumberCopy = taskNumber;
-
                 tasks[taskNumber] = Task.Factory.StartNew(
+                    // ReSharper disable once HeapView.DelegateAllocation
                     () =>
                     {
                         var max = entities.Length * (taskNumberCopy + 1) / degreeOfParallelism;
-                        for (var i = entities.Length * taskNumberCopy / degreeOfParallelism;
-                            i < max;
-                            i++)
-                        {
-                            ActOnComponents(entities[i].ID, deltaTime);
-                        }
+                        for (var i = entities.Length * taskNumberCopy / degreeOfParallelism; i < max; i++)
+                            ActOnEntity(entities[i].ID, deltaTime);
                     });
             }
 
             Task.WaitAll(tasks);
         }
+        
+        protected ref T Get<T>(uint entity) where T : unmanaged
+        {
+            return ref Ecs.GetComponentManager<T>().GetComponent(entity);
+        }
+    }
+
+    [PublicAPI]
+    public abstract class ComponentSystem<T> : IComponentSystem<T> where T : unmanaged
+    {
+        protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
+        protected uint NumberOfComponents => ComponentManager.AssignedComponents;
+        public Span<T> Components => ((Span<T>)ComponentManager.ManagedComponents).Slice(1, (int)NumberOfComponents);
+        public List<ISystem> ComplementarySystems { get; } = new ();
+        public bool Parallel { get; set; }
+    }
+    
+    [PublicAPI]
+    public abstract class UpdateComponentSystem<T> : ComponentSystem<T>, IUpdateSystem where T : unmanaged
+    {
+        public virtual void Execute(float deltaTime)
+        {
+            var components = Components;
+            for (var i = 0; i < components.Length; i++)
+                ActOnComponent(ref components[i], deltaTime);
+        }
+
+        public abstract void ActOnComponent(ref T component, float deltaTime);
+    }
+
+    [PublicAPI]
+    public abstract class DrawComponentSystem<T> : ComponentSystem<T>, IDrawSystem where T : unmanaged
+    {
+        public virtual void Draw(SpriteBatch spriteBatch)
+        {
+            var components = Components;
+            for (var i = 0; i < components.Length; i++)
+                DrawComponent(ref components[i], spriteBatch);
+        }
+
+        public abstract void DrawComponent(ref T component, SpriteBatch spriteBatch);
     }
 
     [PublicAPI]

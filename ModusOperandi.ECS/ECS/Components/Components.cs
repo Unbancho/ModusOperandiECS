@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
-using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS.Components
 {
@@ -20,19 +19,18 @@ namespace ModusOperandi.ECS.Components
         public static ulong Signature { get; private set; }
 
         private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
-        private readonly List<uint> _reverseMap = new List<uint>();
+        private readonly List<uint> _reverseMap = new List<uint>{0};
 
         public ComponentManager()
         {
             Index = ++SignatureCounter.Counter;
             Signature = (ulong) 1 << Index;
-            SceneManager.ComponentArrays[Index] = new Entity[SceneManager.MaxEntities];
             ManagedComponents = new T[1];
         }
 
-        public T[] ManagedComponents { get; set; }
+        public T[] ManagedComponents;
 
-        public uint AssignedComponents { get; set; }
+        public uint AssignedComponents;
 
         public void AddComponent(T component, uint entity)
         {
@@ -59,10 +57,11 @@ namespace ModusOperandi.ECS.Components
         public enum SortOption
         {
             Insertion,
+            [Obsolete]
             Quick
         }
         
-        public void SortComponents(IComparer<T> comparer, SortOption sortOption = SortOption.Quick)
+        public void SortComponents(IComparer<T> comparer, SortOption sortOption = SortOption.Insertion)
         {
             Span<T> componentArray = ManagedComponents;
             componentArray = componentArray.Slice(1, (int)AssignedComponents);
@@ -90,6 +89,8 @@ namespace ModusOperandi.ECS.Components
             }
         }
         
+        // TODO: Make this actually quick I guess, Insertion rules for now.
+        [Obsolete]
         private void QuickSort(Span<T> array, IComparer<T> helper)
         {
             int Partition(Span<T> arr)
@@ -108,11 +109,13 @@ namespace ModusOperandi.ECS.Components
             
             while (true)
             {
-                if (array.IsEmpty || array.Length == 1) return;
+                if (array.Length <= 1) return;
                 var q = Partition(array);
-                QuickSort(array[..q++], helper);
-                if (q >= array.Length - 1) break;
+                array = array[..q++];
+                QuickSort(array, helper);
+                if (q >= array.Length - 1) continue;
                 array = array[q..];
+                QuickSort(array, helper);
             }
         }
 

@@ -1,21 +1,20 @@
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
-using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS.Entities
 {
     [PublicAPI]
     public class EntityManager
     {
-        private const uint MinimumFreeIndices = 1024;
+        private static ulong _minimumFreeIndices = Ecs.MaxEntities;
         private readonly List<uint> _freeIndices = new List<uint>();
         private readonly List<byte> _generation = new List<byte>();
 
         public Entity CreateEntity()
         {
             uint index;
-            if (_freeIndices.Count > MinimumFreeIndices)
+            if ((ulong)_freeIndices.Count > _minimumFreeIndices)
             {
                 index = _freeIndices.First();
                 _freeIndices.Remove(index);
@@ -30,7 +29,7 @@ namespace ModusOperandi.ECS.Entities
             {
                 ID = index
             };
-            SceneManager.ComponentArrays[0][entity.Index] = entity;
+            Ecs.ComponentArrays[0, entity.Index] = entity;
             return entity;
         }
 

@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Reflection;
 using JetBrains.Annotations;
-using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
@@ -15,112 +13,94 @@ namespace ModusOperandi.ECS.Scenes
     [PublicAPI]
     public abstract class Scene : Drawable
     {
-        protected Scene()
+        protected Scene(string name=null)
         {
-            Name = GetType().Name;
-            EntityManager = new EntityManager();
+            Name = name ?? GetType().Name;
         }
 
         public string Name { get; }
-        public EntityManager EntityManager { get; set; }
+        public EntityManager EntityManager { get; set; } = new();
 
-
-        // TODO: Make good lol.
-        public struct Context
-        {
-            public RenderTarget Target;
-            public RenderStates States;
-        }
-
+        private SpriteBatch _spriteBatch = new();
         public virtual void Draw(RenderTarget target, RenderStates states)
         {
-            var spriteBatch = new SpriteBatch();
-            spriteBatch.Begin();
-            foreach (var system in GetSystems<DrawSystemAttribute>()) ((IDrawSystem)system).Draw(spriteBatch);
-            spriteBatch.End();
-            spriteBatch.Draw(target, states);
+            
+            _spriteBatch.Begin();
+            foreach (var system in GetSystems<DrawSystemAttribute>()) (system as IDrawSystem)?.Draw(_spriteBatch);
+            _spriteBatch.End();
+            _spriteBatch.Draw(target, states);
         }
         
         protected Entity PlaceEntity(string type)
         {
-            var file = $"{AppDomain.CurrentDomain.BaseDirectory}/Resources/Entities/{type}.yaml";
+            var file = $"{Directories.EntitiesDirectory}{type}.yaml";
             return EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
         }
 
         public virtual void AddComponentToEntity<T>(T component, Entity entity) where T : unmanaged
         {
-            var cm = SceneManager.GetComponentManager<T>();
-            cm.AddComponent(component, entity.Index);
-            SceneManager.ComponentArrays[cm.Index][entity.Index] = entity;
+            var cm = Ecs.GetComponentManager<T>();
+            cm.AddComponent(component, entity);
+            Ecs.ComponentArrays[cm.Index, entity.Index] = entity;
         }
 
-        public virtual void Initialize()
-        {
-        }
+        public abstract void Initialize();
 
         public virtual void Update(float deltaTime)
         {
-            foreach (var system in GetSystems<UpdateSystemAttribute>()) ((IUpdateSystem)system).Execute(deltaTime);
+            foreach (var system in GetSystems<UpdateSystemAttribute>()) (system as IUpdateSystem)?.Execute(deltaTime);
         }
 
         // TODO: Auto-sort based on dependencies.
-        public T StartSystem<T>() where T : Systems.System, new()
+        // TODO: Rework this.
+        public T StartSystem<T>() where T : ISystem, new()
         {
             var system = new T();
-            var groupType = system.GetType().GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
-            if (groupType == null)
-                groupType = typeof(UpdateSystemAttribute);
-            GetSystems((dynamic) Activator.CreateInstance(groupType)).Add(system);
-            _allSystems.Add(system);
+            foreach (var complementarySystem in system.ComplementarySystems)
+            {
+                AddSystem(complementarySystem);
+            }
+            AddSystem(system);
             return system;
         }
 
-        public void StopSystem<T>() where T : Systems.System
+        public void AddSystem<T>(T system) where T : ISystem
         {
-            var groupType = typeof(T).GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
-            if (groupType == null) return;
-            var systemsList = GetSystems((dynamic) Activator.CreateInstance(groupType));
-            foreach (var system in systemsList)
-            {
-                if (system.GetType() != typeof(T)) continue;
-                systemsList.Remove(system);
-                return;
-            }
+            var attribute = typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
+            GetSystems((dynamic)attribute).Add(system);
         }
 
-        public void ToggleSystem<T>() where T : Systems.UpdateSystem, new()
+        public bool StopSystem<T>() where T : ISystem
         {
-            var groupType = typeof(T).GetCustomAttribute(typeof(SystemGroupAttribute))?.GetType();
-            if (groupType == null) return;
-            var systemsList = GetSystems((dynamic) Activator.CreateInstance(groupType));
+            var attribute = typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
+            var systemsList = GetSystems((dynamic) attribute);
             foreach (var system in systemsList)
             {
                 if (system.GetType() != typeof(T)) continue;
                 systemsList.Remove(system);
-                return;
+                return true;
             }
 
+            return false;
+        }
+
+        public void ToggleSystem<T>() where T : ISystem, new()
+        {
+            if(StopSystem<T>()) return;
             StartSystem<T>();
         }
 
-        public void StopSystem<T>(T _) where T : Systems.UpdateSystem
+        public void StopSystem<T>(T _) where T : ISystem
         {
             StopSystem<T>();
         }
 
-        private List<Systems.System> _allSystems = new List<Systems.System>();
-
-        public List<Systems.System> GetAllSystems()
-        {
-            return _allSystems;
-        }
-
-        public static List<Systems.System> GetSystems<T>()
+        public static List<ISystem> GetSystems<T>()
         {
             return PerType<T>.Systems;
         }
 
-        public static List<Systems.System> GetSystems<T>(T _)
+        public static List<ISystem> GetSystems<T>(T _)
         {
             return GetSystems<T>();
         }
@@ -129,7 +109,7 @@ namespace ModusOperandi.ECS.Scenes
         private static class PerType<T>
         {
             // ReSharper disable once StaticMemberInGenericType
-            public static readonly List<Systems.System> Systems = new List<Systems.System>();
+            public static readonly List<ISystem> Systems = new List<ISystem>();
         }
     }
 }
