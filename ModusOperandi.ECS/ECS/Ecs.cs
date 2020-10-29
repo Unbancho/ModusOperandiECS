@@ -8,12 +8,13 @@ using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS
 {
+
     [PublicAPI]
     public static class Ecs
     {
         public static ulong MaxEntities = 1024;
-        public static Dictionary<ulong, Entity[]> ArchetypeEntityDictionary = new Dictionary<ulong, Entity[]>();
-        public static Entity[,] ComponentArrays { get; } = new Entity[sizeof(ulong) * 8, MaxEntities];
+        public static readonly Dictionary<ulong, Entity[]> ArchetypeEntityDictionary = new Dictionary<ulong, Entity[]>();
+        public static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
 
         public static ComponentManager<T> GetComponentManager<T>() where T : unmanaged
         {
@@ -37,7 +38,7 @@ namespace ModusOperandi.ECS
         {
             for (uint i = 0; i < MaxEntities; i++)
                 if (EntityMatches(i, GetComponentIndices(archetype.Signature)))
-                    yield return ComponentArrays[0, i];
+                    yield return i;
         }
 
         private static bool EntityMatches(uint entity, IEnumerable<int> indices)
@@ -47,14 +48,14 @@ namespace ModusOperandi.ECS
 
         private static IEnumerable<int> GetComponentIndices(ulong signature)
         {
-            for (var i = 0; signature >= (ulong) 1 << i; i++)
-                if ((signature & ((ulong) 1 << i)) > 0)
+            for (var i = 0; signature >= 1u << i; i++)
+                if ((signature & (1u << i)) > 0)
                     yield return i;
         }
 
         public static bool EntityHasComponent(uint entity, int componentIndex)
         {
-            return ComponentArrays[componentIndex, entity] != 0;
+            return (EntityArchetypes[entity] & 1u << componentIndex) != 0;
         }
     }
 

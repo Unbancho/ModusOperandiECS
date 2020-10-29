@@ -25,12 +25,7 @@ namespace ModusOperandi.ECS.Entities
                 index = (uint) _generation.Count; // Removed -1 to have 0 be null
             }
 
-            var entity = new Entity
-            {
-                ID = index
-            };
-            Ecs.ComponentArrays[0, entity.Index] = entity;
-            return entity;
+            return index;
         }
 
         public bool IsEntityAlive(Entity entity)

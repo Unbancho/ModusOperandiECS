@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using JetBrains.Annotations;
+using ModusOperandi.ECS.Components;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace ModusOperandi.Utils.YAML
 {
@@ -9,7 +13,7 @@ namespace ModusOperandi.Utils.YAML
     public static class Yaml
     {
         // ReSharper disable once HeapView.ObjectAllocation.Evident
-        private static readonly DeserializerBuilder DeserializerBuilder = new DeserializerBuilder();
+        public static readonly DeserializerBuilder DeserializerBuilder = new DeserializerBuilder();
 
         private static IDeserializer _deserializer;
 
@@ -18,8 +22,20 @@ namespace ModusOperandi.Utils.YAML
             DeserializerBuilder.WithTagMapping(tag, typeof(T));
         }
 
+        public static void RegisterComponentMappings()
+        {
+            var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(t => t.GetTypes().Where(type => Attribute.IsDefined(type, typeof(Component)))).ToArray();
+            foreach (var componentType in componentTypes)
+            {
+                DeserializerBuilder
+                    .WithTagMapping($"!{componentType.Name.Replace("Component", "").ToLower()}", componentType);
+            }
+        }
+
         public static void BuildDeserializer()
         {
+            DeserializerBuilder.WithNamingConvention(PascalCaseNamingConvention.Instance);
             _deserializer = DeserializerBuilder.Build();
         }
 

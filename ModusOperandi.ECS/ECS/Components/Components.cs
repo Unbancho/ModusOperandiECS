@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using JetBrains.Annotations;
+using System.Collections.Generic;
 using ModusOperandi.ECS.Entities;
 
 namespace ModusOperandi.ECS.Components
@@ -18,13 +18,13 @@ namespace ModusOperandi.ECS.Components
         // ReSharper disable once StaticMemberInGenericType
         public static ulong Signature { get; private set; }
 
-        private readonly Dictionary<uint, uint> _map = new Dictionary<uint, uint>();
-        private readonly List<uint> _reverseMap = new List<uint>{0};
+        private readonly Dictionary<Entity, uint> _map = new Dictionary<Entity, uint>();
+        private readonly List<Entity> _reverseMap = new List<Entity>{0};
 
         public ComponentManager()
         {
             Index = ++SignatureCounter.Counter;
-            Signature = (ulong) 1 << Index;
+            Signature = 1u << Index;
             ManagedComponents = new T[1];
         }
 
@@ -32,7 +32,7 @@ namespace ModusOperandi.ECS.Components
 
         public uint AssignedComponents;
 
-        public void AddComponent(T component, uint entity)
+        public void AddComponent(T component, Entity entity)
         {
             AssignedComponents++;
             _map[entity] = AssignedComponents;
@@ -46,18 +46,16 @@ namespace ModusOperandi.ECS.Components
             ManagedComponents[_map[entity]] = component;
         }
 
-        public uint LookUp(uint entity) => _map.GetValueOrDefault<uint, uint>(entity, 0);
+        public uint LookUp(Entity entity) => _map.GetValueOrDefault<Entity, uint>(entity, 0);
         
-        public uint ReverseLookUp(uint index) => _reverseMap[(int)index];
+        public Entity ReverseLookUp(uint index) => _reverseMap[(int)index];
         
-        public ref T GetComponent(Entity entity) => ref GetComponent(entity.ID);
-
-        public ref T GetComponent(uint entity) => ref ManagedComponents[LookUp(entity)];
+        public ref T GetComponent(Entity entity) => ref ManagedComponents[LookUp(entity)];
 
         public enum SortOption
         {
             Insertion,
-            [Obsolete]
+            [Obsolete("Not quick.")]
             Quick
         }
         
@@ -130,6 +128,7 @@ namespace ModusOperandi.ECS.Components
         }
     }
 
+    [AttributeUsage(AttributeTargets.Struct)]
     public class Component : Attribute
     {
     }

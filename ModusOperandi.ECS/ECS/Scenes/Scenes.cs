@@ -2,10 +2,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
-using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
 using ModusOperandi.Rendering;
-using ModusOperandi.Utils.YAML;
 using SFML.Graphics;
 
 namespace ModusOperandi.ECS.Scenes
@@ -31,17 +29,19 @@ namespace ModusOperandi.ECS.Scenes
             _spriteBatch.Draw(target, states);
         }
         
+        /*
         protected Entity PlaceEntity(string type)
         {
             var file = $"{Directories.EntitiesDirectory}{type}.yaml";
             return EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
         }
+        */
 
         public virtual void AddComponentToEntity<T>(T component, Entity entity) where T : unmanaged
         {
             var cm = Ecs.GetComponentManager<T>();
             cm.AddComponent(component, entity);
-            Ecs.ComponentArrays[cm.Index, entity.Index] = entity;
+            Ecs.EntityArchetypes[entity.Index] |= 1u << cm.Index;
         }
 
         public abstract void Initialize();
@@ -52,7 +52,6 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         // TODO: Auto-sort based on dependencies.
-        // TODO: Rework this.
         public T StartSystem<T>() where T : ISystem, new()
         {
             var system = new T();
@@ -64,52 +63,77 @@ namespace ModusOperandi.ECS.Scenes
             return system;
         }
 
-        public void AddSystem<T>(T system) where T : ISystem
+        public bool AddSystem<T>(T system) where T : ISystem
         {
-            var attribute = typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
-            GetSystems((dynamic)attribute).Add(system);
+            return GetSystems((dynamic) GetSystemGroupAttribute<T>()).Add(system);
         }
 
-        public bool StopSystem<T>() where T : ISystem
+        public bool StopSystem<T>() where T : ISystem, new()
         {
-            var attribute = typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
-            var systemsList = GetSystems((dynamic) attribute);
-            foreach (var system in systemsList)
-            {
-                if (system.GetType() != typeof(T)) continue;
-                systemsList.Remove(system);
-                return true;
-            }
-
-            return false;
+            return StopSystem(new T());
+        }
+        
+        public bool StopSystem<T>(T dummy) where T : ISystem
+        {
+            return GetSystems((dynamic) GetSystemGroupAttribute<T>()).Remove(dummy);
         }
 
+        private SystemGroupAttribute GetSystemGroupAttribute<T>() where T : ISystem
+        {
+            return typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
+        }
+        
         public void ToggleSystem<T>() where T : ISystem, new()
         {
             if(StopSystem<T>()) return;
             StartSystem<T>();
         }
-
-        public void StopSystem<T>(T _) where T : ISystem
+        
+        public static SortedSet<ISystem> GetSystems<T>() where T : SystemGroupAttribute
         {
-            StopSystem<T>();
+            return _systems.Get<T>();
         }
 
-        public static List<ISystem> GetSystems<T>()
-        {
-            return PerType<T>.Systems;
-        }
-
-        public static List<ISystem> GetSystems<T>(T _)
+        public static SortedSet<ISystem> GetSystems<T>(T _) where T : SystemGroupAttribute
         {
             return GetSystems<T>();
         }
+        
+        private static SystemsManager _systems = new SystemsManager();
+    }
 
-        // ReSharper disable once UnusedTypeParameter
-        private static class PerType<T>
+    [PublicAPI]
+    public class TypeKeyedCollection<T> where T : new()
+    {
+        public T Get<TK>()
         {
-            // ReSharper disable once StaticMemberInGenericType
-            public static readonly List<ISystem> Systems = new List<ISystem>();
+            var e = PerType<TK>.Element;
+            if (e != null) return e;
+            Put<TK>(new T());
+            return PerType<TK>.Element;
+        }
+        
+        public void Put<TK>(T element)
+        {
+            PerType<TK>.Element = element;
+        }
+
+        private static class PerType<TK>
+        {
+            public static T Element;
+        }
+    }
+
+    public class SystemsManager : TypeKeyedCollection<SortedSet<ISystem>>
+    {
+        public new SortedSet<ISystem> Get<TK>() where TK : SystemGroupAttribute
+        {
+            return base.Get<TK>();
+        }
+
+        public new void Put<TK>(SortedSet<ISystem> element) where TK : SystemGroupAttribute
+        {
+            base.Put<TK>(element);
         }
     }
 }

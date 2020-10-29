@@ -10,37 +10,77 @@ namespace ModusOperandi.ECS.Scenes
 {
     // TODO: Systems in yaml.
     [PublicAPI]
-    public static class SceneBuilder
+    public class SceneBuilder
     {
-        private static readonly Type[] SceneTypes = AppDomain.CurrentDomain.GetAssemblies()
+        private readonly Type[] _sceneTypes = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(t => t.GetTypes().Where(type => type.BaseType == typeof(Scene))).ToArray();
-
-        public static Scene BuildScene(Dictionary<object, object> dict)
+        
+        public Scene BuildScene(Dictionary<object, object> dict)
         {
-            var sceneType = SceneTypes.First(type =>
+            var sceneType = _sceneTypes.First(type =>
                 string.Equals(type.Name, (string) dict["scene"], StringComparison.CurrentCultureIgnoreCase));
             var scene = (Scene) Activator.CreateInstance(sceneType);
-            /*
-            foreach (var systemName in (dict["systems"] as Dictionary<object, object>)?.Keys)
+            /* foreach (var systemName in (dict["systems"] as Dictionary<object, object>)?.Keys)
             {
                 
-            }
-            */
+            }*/
+            var entityBuilder = new EntityBuilder();
             foreach (var entityDict in (List<object>) dict["entities"])
             {
                 var entityName = (entityDict as Dictionary<object, object>)?.Keys.First();
-                var argsDict =
-                    Yaml.Deserialize<object, object>(Directory
-                        .GetFiles($"{AppDomain.CurrentDomain.BaseDirectory}/Resources/Entities/",
-                            $"{entityName}.yaml", SearchOption.AllDirectories).First());
-                if ((entityDict as Dictionary<object, object>)?[entityName] is List<object> componentDicts)
-                    foreach (var componentDict in componentDicts)
-                    foreach (var (key, value) in (Dictionary<object, object>) componentDict)
-                        argsDict[key] = value;
-                EntityBuilder.BuildEntity(argsDict, scene);
+                var components = (List<object>) (entityDict as Dictionary<object, object>)?[entityName];
+                var defaultComponents = Yaml.Deserialize<object, List<object>>(Directory
+                    .GetFiles($"{AppDomain.CurrentDomain.BaseDirectory}/Resources/Entities/",
+                        $"{entityName}.yaml", SearchOption.AllDirectories).First()).Values.ToList()[0];
+                entityBuilder.BuildEntity(
+                    MergeComponentLists(defaultComponents, components), scene);
             }
 
             return scene;
+        }
+
+        private List<object> MergeComponentLists(List<object> defaultComponents, List<object> updatedComponents)
+        {
+            var dict = new Dictionary<string, object>();
+            foreach (var defaultComponent in defaultComponents)
+            {
+                dict[((dynamic)defaultComponent).GetType().Name] = defaultComponent;
+            }
+
+            foreach (var updatedComponent in updatedComponents)
+            {
+                if(!dict.TryGetValue(updatedComponent.GetType().Name, out dynamic d))
+                {
+                    dict[updatedComponent.GetType().Name] = updatedComponent;
+                }
+                else
+                {
+                    dict[updatedComponent.GetType().Name] = MergeComponents(ref d, (dynamic) updatedComponent);
+                }
+            }
+
+            return dict.Values.ToList();
+        }
+
+        private T MergeComponents<T>(ref T @default, T updated)
+        {
+            static void OverWriteMembers(ref T @default, T updated, IEnumerable<dynamic> members)
+            {
+                foreach (var member in members)
+                {
+                    var defaultValue = member.GetValue(@default);
+                    var updatedValue = member.GetValue(updated);
+                    if (updatedValue != defaultValue)
+                    {
+                        member.SetValue(@default, updatedValue);
+                    }
+                }
+            }
+
+            var type = @default.GetType();
+            OverWriteMembers(ref @default, updated, type.GetFields());
+            OverWriteMembers(ref @default, updated, type.GetProperties());
+            return @default;
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
@@ -10,17 +11,6 @@ using ModusOperandi.Rendering;
 
 namespace ModusOperandi.ECS.Systems
 {
-    [PublicAPI]
-    public class SystemAttribute : Attribute
-    {
-        public SystemAttribute(params Type[] systemDependencies)
-        {
-            SystemDependencies = systemDependencies;
-        }
-
-        public Type[] SystemDependencies { get; }
-    }
-    
     [PublicAPI]
     public interface ISystem
     {
@@ -52,15 +42,54 @@ namespace ModusOperandi.ECS.Systems
         void Draw(SpriteBatch spriteBatch);
     }
 
+    //TODO: Refactor, especially IComparable
     [PublicAPI]
-    public abstract class UpdateEntitySystem : IEntitySystem, IUpdateSystem
+    public abstract class Singleton : IComparable
+    {
+        public int CompareTo(object? obj)
+        {
+            if (obj == null) return 1;
+            var attribute = GetType().GetCustomAttribute<SystemGroupAttribute>();
+            if (attribute == null) return 1;
+            var t= ((dynamic)obj).GetType();
+            foreach (var d in attribute.SystemDependencies)
+            {
+                if (t == d) return 1;
+            }
+            attribute = ((Type) t).GetCustomAttribute<SystemGroupAttribute>();
+            if (attribute == null) return 1;
+            foreach (var d in attribute.SystemDependencies)
+            {
+                if (GetType() == d) return -1;
+            }
+            return Equals(obj) ? 0 : 1;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as Singleton);
+        }
+
+        public bool Equals(Singleton s)
+        {
+            if (ReferenceEquals(s, null)) return false;
+            if (ReferenceEquals(this, s)) return true;
+            return GetType() == s.GetType();
+        }
+
+        public static bool operator ==(Singleton left, Singleton right) => left?.Equals(right) ?? ReferenceEquals(right, null);
+        public static bool operator !=(Singleton left, Singleton right) => !(left == right);
+    }
+
+    [PublicAPI]
+    public abstract class UpdateEntitySystem : Singleton, IEntitySystem, IUpdateSystem
     {
         public Archetype Archetype { get; }
         public List<ISystem> ComplementarySystems { get; } = new ();
         public bool Parallel { get; set; } = true;
         
         
-        protected abstract void ActOnEntity(uint entity, float deltaTime);
+        protected abstract void ActOnEntity(Entity entity, float deltaTime);
 
         protected UpdateEntitySystem(Archetype archetype)
         {
@@ -81,7 +110,7 @@ namespace ModusOperandi.ECS.Systems
         private void ActOnEntities(float deltaTime, Entity[] entities)
         {
             for (var i = 0; i < entities.Length; i++)
-                ActOnEntity(entities[i].ID, deltaTime);
+                ActOnEntity(entities[i], deltaTime);
         }
         
         // ReSharper disable once HeapView.ClosureAllocation
@@ -106,15 +135,10 @@ namespace ModusOperandi.ECS.Systems
 
             Task.WaitAll(tasks);
         }
-        
-        protected ref T Get<T>(uint entity) where T : unmanaged
-        {
-            return ref Ecs.GetComponentManager<T>().GetComponent(entity);
-        }
     }
 
     [PublicAPI]
-    public abstract class ComponentSystem<T> : IComponentSystem<T> where T : unmanaged
+    public abstract class ComponentSystem<T> : Singleton, IComponentSystem<T> where T : unmanaged
     {
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
         protected uint NumberOfComponents => ComponentManager.AssignedComponents;
@@ -152,15 +176,29 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public abstract class SystemGroupAttribute : Attribute
     {
+        protected SystemGroupAttribute(params Type[] systemDependencies)
+        {
+            SystemDependencies = systemDependencies;
+        }
+
+        public Type[] SystemDependencies { get; }
     }
 
     [PublicAPI]
     public class UpdateSystemAttribute : SystemGroupAttribute
     {
+        public UpdateSystemAttribute(params Type[] systemDependencies) : base(systemDependencies)
+        {
+            
+        }
     }
 
     [PublicAPI]
     public class DrawSystemAttribute : SystemGroupAttribute
     {
+        public DrawSystemAttribute(params Type[] systemDependencies) : base(systemDependencies)
+        {
+            
+        }
     }
 }
