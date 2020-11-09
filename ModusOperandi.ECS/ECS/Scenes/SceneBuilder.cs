@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.EntityBuilding;
-using ModusOperandi.Utils.YAML;
 
 namespace ModusOperandi.ECS.Scenes
 {
@@ -27,11 +25,9 @@ namespace ModusOperandi.ECS.Scenes
             var entityBuilder = new EntityBuilder();
             foreach (var entityDict in (List<object>) dict["entities"])
             {
-                var entityName = (entityDict as Dictionary<object, object>)?.Keys.First();
+                var entityName = (string) (entityDict as Dictionary<object, object>)?.Keys.First();
                 var components = (List<object>) (entityDict as Dictionary<object, object>)?[entityName];
-                var defaultComponents = Yaml.Deserialize<object, List<object>>(Directory
-                    .GetFiles($"{AppDomain.CurrentDomain.BaseDirectory}/Resources/Entities/",
-                        $"{entityName}.yaml", SearchOption.AllDirectories).First()).Values.ToList()[0];
+                var defaultComponents = entityBuilder.LoadEntityComponents(entityName);
                 entityBuilder.BuildEntity(
                     MergeComponentLists(defaultComponents, components), scene);
             }

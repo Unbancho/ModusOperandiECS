@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
@@ -12,8 +11,7 @@ namespace ModusOperandi.ECS
     [PublicAPI]
     public static class Ecs
     {
-        public static ulong MaxEntities = 1024;
-        public static readonly Dictionary<ulong, Entity[]> ArchetypeEntityDictionary = new Dictionary<ulong, Entity[]>();
+        public static ulong MaxEntities = 1_000_000;
         public static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
 
         public static ComponentManager<T> GetComponentManager<T>() where T : unmanaged
@@ -34,23 +32,51 @@ namespace ModusOperandi.ECS
             public static ComponentManager<T> ComponentManager;
         }
 
-        public static IEnumerable<Entity> Query(Archetype archetype)
+        public static Entity[] Query(Archetype archetype)
         {
-            for (uint i = 0; i < MaxEntities; i++)
-                if (EntityMatches(i, GetComponentIndices(archetype.Signature)))
-                    yield return i;
-        }
+            var entities = new List<Entity>();
+            var indices = GetComponentIndices(archetype.Signature);
+            for (var entity = 0u; entity < MaxEntities; entity++)
+            {
+                if (EntityMatches(entity, indices)) entities.Add(entity);
+            }
 
-        private static bool EntityMatches(uint entity, IEnumerable<int> indices)
-        {
-            return indices.All(index => EntityHasComponent(entity, index));
+            return entities.ToArray();
         }
-
-        private static IEnumerable<int> GetComponentIndices(ulong signature)
+        
+        // TODO: Change loop to iterate a collection of Entities.
+        public static Entity[] Query(Archetype archetype, Scene scene)
         {
+            var entities = new List<Entity>();
+            var indices = GetComponentIndices(archetype.Signature);
+            for (var entity = 0u; entity < scene.EntityManager.NumberOfAliveEntities; entity++)
+            {
+                if (EntityMatches(entity, indices)) entities.Add(entity);
+            }
+
+            return entities.ToArray();
+        }
+        
+        private static bool EntityMatches(uint entity, int[] indices)
+        {
+            for (var i = 0; i < indices.Length; i++)
+            {
+                if (!EntityHasComponent(entity, indices[i])) return false;
+            }
+            return true;
+        }
+        
+        private static Dictionary<ulong, int[]> _signatureIndices = new Dictionary<ulong, int[]>();
+        private static int[] GetComponentIndices(ulong signature)
+        {
+            if (_signatureIndices.TryGetValue(signature, out var idxs)) return idxs;
+            var indices = new List<int>();
             for (var i = 0; signature >= 1u << i; i++)
                 if ((signature & (1u << i)) > 0)
-                    yield return i;
+                    indices.Add(i);
+            var arr = indices.ToArray();
+            _signatureIndices[signature] = arr;
+            return arr;
         }
 
         public static bool EntityHasComponent(uint entity, int componentIndex)

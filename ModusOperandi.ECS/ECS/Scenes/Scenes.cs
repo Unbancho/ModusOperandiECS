@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Reflection;
 using JetBrains.Annotations;
+using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
+using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
 using ModusOperandi.Rendering;
 using SFML.Graphics;
@@ -28,20 +30,17 @@ namespace ModusOperandi.ECS.Scenes
             _spriteBatch.End();
             _spriteBatch.Draw(target, states);
         }
-        
-        /*
-        protected Entity PlaceEntity(string type)
+
+        public Entity PlaceEntity(string type)
         {
-            var file = $"{Directories.EntitiesDirectory}{type}.yaml";
-            return EntityBuilder.BuildEntity(Yaml.Deserialize<object, object>(file), this);
+            var entityBuilder = new EntityBuilder();
+            return entityBuilder.BuildEntity(entityBuilder.LoadEntityComponents(type), this);
         }
-        */
 
         public virtual void AddComponentToEntity<T>(T component, Entity entity) where T : unmanaged
         {
-            var cm = Ecs.GetComponentManager<T>();
-            cm.AddComponent(component, entity);
-            Ecs.EntityArchetypes[entity.Index] |= 1u << cm.Index;
+            Ecs.GetComponentManager<T>().AddComponent(component, entity);
+            Ecs.EntityArchetypes[entity.Index] |= IComponentManager<T>.Signature;
         }
 
         public abstract void Initialize();
@@ -65,6 +64,7 @@ namespace ModusOperandi.ECS.Scenes
 
         public bool AddSystem<T>(T system) where T : ISystem
         {
+            system.Scene = this;
             return GetSystems((dynamic) GetSystemGroupAttribute<T>()).Add(system);
         }
 

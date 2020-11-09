@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
+using ModusOperandi.ECS.Scenes;
 using ModusOperandi.Rendering;
 
 namespace ModusOperandi.ECS.Systems
@@ -14,6 +14,7 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public interface ISystem
     {
+        Scene Scene { get; set; }
         List<ISystem> ComplementarySystems { get; }
         bool Parallel { get; set; }
     }
@@ -21,7 +22,7 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public interface IEntitySystem : ISystem
     {
-        Archetype Archetype { get; }
+        Archetype[] Archetypes { get; }
     }
 
     [PublicAPI]
@@ -84,27 +85,37 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public abstract class UpdateEntitySystem : Singleton, IEntitySystem, IUpdateSystem
     {
-        public Archetype Archetype { get; }
+        public Archetype[] Archetypes { get; }
+        public Scene Scene { get; set; }
         public List<ISystem> ComplementarySystems { get; } = new ();
         public bool Parallel { get; set; } = true;
         
         
         protected abstract void ActOnEntity(Entity entity, float deltaTime);
 
-        protected UpdateEntitySystem(Archetype archetype)
+        // TODO: Refactor archetype dictionary stuff.
+        protected UpdateEntitySystem(Archetype[] archetypes)
         {
-            Archetype = archetype;
-            // ReSharper disable once HeapView.ObjectAllocation
-            Ecs.ArchetypeEntityDictionary[Archetype.Signature] = Ecs.Query(Archetype).ToArray();
+            Archetypes = archetypes;
         }
         
+        // TODO: Refactor archetype dictionary stuff.
+        protected UpdateEntitySystem(Archetype archetype)
+        {
+            Archetypes = new[] {archetype};
+        }
+        
+        // TODO: Refactor archetype dictionary stuff.
         public virtual void Execute(float deltaTime)
         {
-            var entities = Ecs.ArchetypeEntityDictionary[Archetype.Signature];
-            if (Parallel)
-                ActOnEntitiesParallel(deltaTime, entities);
-            else
-                ActOnEntities(deltaTime, entities);
+            foreach (var archetype in Archetypes)
+            {
+                var entities = Ecs.Query(archetype, Scene);
+                if (Parallel)
+                    ActOnEntitiesParallel(deltaTime, entities);
+                else
+                    ActOnEntities(deltaTime, entities);
+            }
         }
 
         private void ActOnEntities(float deltaTime, Entity[] entities)
@@ -140,6 +151,7 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public abstract class ComponentSystem<T> : Singleton, IComponentSystem<T> where T : unmanaged
     {
+        public Scene Scene { get; set; }
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
         protected uint NumberOfComponents => ComponentManager.AssignedComponents;
         public Span<T> Components => ((Span<T>)ComponentManager.ManagedComponents).Slice(1, (int)NumberOfComponents);

@@ -39,5 +39,7 @@ namespace ModusOperandi.ECS.Entities
             ++_generation[(int) index];
             _freeIndices.Add(index);
         }
+
+        public ulong NumberOfAliveEntities => (ulong)_generation.Count + 1;
     }
 }
