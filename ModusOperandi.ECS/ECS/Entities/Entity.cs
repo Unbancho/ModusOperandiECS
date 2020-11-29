@@ -1,3 +1,5 @@
+#define UNMANAGED
+
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 
@@ -10,8 +12,8 @@ namespace ModusOperandi.ECS.Entities
         public static implicit operator uint(Entity entity) => entity.ID;
         public static implicit operator Entity(uint id) => new Entity(id);
 
-        private const int EntityIndexBits = 16;
-        private const int EntityGenerationBits = 32-EntityIndexBits;
+        private const byte EntityIndexBits = 20;
+        private const byte EntityGenerationBits = 32-EntityIndexBits;
         private const uint EntityIndexMask = (1 << EntityIndexBits) - 1;
         private const uint EntityGenerationMask = (1 << EntityGenerationBits) - 1;
 
@@ -29,9 +31,14 @@ namespace ModusOperandi.ECS.Entities
     [PublicAPI]
     public static class EntityExtensions
     {
-        public static bool IsNullEntity(this Entity entity) => entity.ID == 0;
+        public static bool IsNullEntity(this Entity entity) => entity == 0;
 
-        public static ref T Get<T>(this Entity entity) where T : unmanaged 
+        public static ref T Get<T>(this Entity entity) where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
             => ref Ecs.GetComponentManager<T>().GetComponent(entity);
     }
 }

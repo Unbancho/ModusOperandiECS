@@ -18,8 +18,7 @@ namespace ModusOperandi.ECS.Utils
         {
             get
             {
-                fixed (char* s = _string)
-                    return new string(s);
+                fixed (char* s = _string) return new string(s);
             }
 
             set

@@ -145,5 +145,60 @@ namespace ModusOperandi.Rendering
                 index += item.Count;
             }
         }
+        
+        public unsafe void Draw(Texture texture, FloatRect rec, IntRect src, Color color)
+        {
+            var index = Create(texture);
+
+            fixed (Vertex* fptr = _vertices)
+            {
+                var ptr = fptr + index;
+
+                ptr->Position.X = rec.Left;
+                ptr->Position.Y = rec.Top;
+                ptr->TexCoords.X = src.Left;
+                ptr->TexCoords.Y = src.Top;
+                ptr->Color = color;
+                ptr++;
+
+                ptr->Position.X = rec.Left + rec.Width;
+                ptr->Position.Y = rec.Top;
+                ptr->TexCoords.X = src.Left + src.Width;
+                ptr->TexCoords.Y = src.Top;
+                ptr->Color = color;
+                ptr++;
+
+                ptr->Position.X = rec.Left + rec.Width;
+                ptr->Position.Y = rec.Top + rec.Height;
+                ptr->TexCoords.X = src.Left + src.Width;
+                ptr->TexCoords.Y = src.Top + src.Height;
+                ptr->Color = color;
+                ptr++;
+
+                ptr->Position.X = rec.Left;
+                ptr->Position.Y = rec.Top + rec.Height;
+                ptr->TexCoords.X = src.Left;
+                ptr->TexCoords.Y = src.Top + src.Height;
+                ptr->Color = color;
+            }
+        }
+
+        public void Draw(Texture texture, FloatRect rec, Color color)
+        {
+            int width = 1, height = 1;
+            if (texture != null)
+            {
+                width = (int)texture.Size.X;
+                height = (int)texture.Size.Y;
+            }
+            Draw(texture, rec, new IntRect(0, 0, width, height), color);
+        }
+
+        public void Draw(Texture texture, Vector2f pos, Color color)
+        {
+            var width = (int)texture.Size.X;
+            var height = (int)texture.Size.Y;
+            Draw(texture, new FloatRect(pos.X, pos.Y, width, height), new IntRect(0, 0, width, height), color);
+        }
     }
 }

@@ -10,6 +10,7 @@ namespace ModusOperandi.ECS.Entities
         private static ulong _minimumFreeIndices = Ecs.MaxEntities;
         private readonly List<uint> _freeIndices = new List<uint>();
         private readonly List<byte> _generation = new List<byte>();
+        private readonly List<Entity> _createdEntities = new List<Entity>();
 
         public Entity CreateEntity()
         {
@@ -24,7 +25,7 @@ namespace ModusOperandi.ECS.Entities
                 _generation.Add(0);
                 index = (uint) _generation.Count; // Removed -1 to have 0 be null
             }
-
+            _createdEntities.Add(index);
             return index;
         }
 
@@ -40,6 +41,6 @@ namespace ModusOperandi.ECS.Entities
             _freeIndices.Add(index);
         }
 
-        public ulong NumberOfAliveEntities => (ulong)_generation.Count + 1;
+        public Entity[] CreatedEntities => _createdEntities.ToArray();
     }
 }

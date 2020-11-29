@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <LangVersion>preview</LangVersion>
     <TargetFramework>netcoreapp5.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>ModusOperandi</RootNamespace>

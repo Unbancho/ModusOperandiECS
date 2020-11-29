@@ -18,10 +18,12 @@ namespace ModusOperandi.ECS.Scenes
             var sceneType = _sceneTypes.First(type =>
                 string.Equals(type.Name, (string) dict["scene"], StringComparison.CurrentCultureIgnoreCase));
             var scene = (Scene) Activator.CreateInstance(sceneType);
-            /* foreach (var systemName in (dict["systems"] as Dictionary<object, object>)?.Keys)
+            /*
+            foreach (var systemName in (dict["systems"] as Dictionary<object, object>)?.Keys)
             {
                 
-            }*/
+            }
+            */
             var entityBuilder = new EntityBuilder();
             foreach (var entityDict in (List<object>) dict["entities"])
             {
@@ -35,7 +37,7 @@ namespace ModusOperandi.ECS.Scenes
             return scene;
         }
 
-        private List<object> MergeComponentLists(List<object> defaultComponents, List<object> updatedComponents)
+        private static List<object> MergeComponentLists(List<object> defaultComponents, List<object> updatedComponents)
         {
             var dict = new Dictionary<string, object>();
             foreach (var defaultComponent in defaultComponents)
@@ -58,7 +60,7 @@ namespace ModusOperandi.ECS.Scenes
             return dict.Values.ToList();
         }
 
-        private T MergeComponents<T>(ref T @default, T updated)
+        private static T MergeComponents<T>(ref T @default, T updated)
         {
             static void OverWriteMembers(ref T @default, T updated, IEnumerable<dynamic> members)
             {

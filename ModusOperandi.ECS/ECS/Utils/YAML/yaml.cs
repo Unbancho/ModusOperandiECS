@@ -25,7 +25,7 @@ namespace ModusOperandi.Utils.YAML
         public static void RegisterComponentMappings()
         {
             var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(t => t.GetTypes().Where(type => Attribute.IsDefined(type, typeof(Component)))).ToArray();
+                .SelectMany(t => t.GetTypes().Where(type => Attribute.IsDefined(type, typeof(Component))));
             foreach (var componentType in componentTypes)
             {
                 DeserializerBuilder
@@ -42,13 +42,17 @@ namespace ModusOperandi.Utils.YAML
         public static Dictionary<TK, TV> Deserialize<TK, TV>(string filepath)
         {
             string data;
-            // ReSharper disable once HeapView.ObjectAllocation.Evident
             using (var sr = new StreamReader(filepath))
             {
                 data = sr.ReadToEnd();
             }
 
-            return _deserializer.Deserialize<Dictionary<TK, TV>>(data);
+            return DeserializeString<TK, TV>(data);
+        }
+
+        public static Dictionary<TK, TV> DeserializeString<TK, TV>(string data)
+        {
+            return _deserializer.Deserialize<Dictionary<TK, TV>>(data);   
         }
     }
 }

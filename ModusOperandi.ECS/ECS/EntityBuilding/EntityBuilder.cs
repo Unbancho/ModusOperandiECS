@@ -12,8 +12,7 @@ namespace ModusOperandi.ECS.EntityBuilding
     [PublicAPI]
     public class EntityBuilder
     {
-        private static Dictionary<string, List<object>> _entityCache = new Dictionary<string, List<object>>();
-        
+        // TODO: Refactor to allow EntityManager to be private (PlaceEntity?), and to allow building entities without a scene.
         public Entity BuildEntity(List<object> components, Scene scene)
         {
             var entity = scene.EntityManager.CreateEntity();
@@ -27,11 +26,10 @@ namespace ModusOperandi.ECS.EntityBuilding
 
         public List<object> LoadEntityComponents(string type)
         {
-            if (_entityCache.TryGetValue(type, out var components)) return components;
-            components = Yaml.Deserialize<object, List<object>>(Directory
+            var components = Yaml.Deserialize<object, List<object>>(Directory
                 .GetFiles($"{Directories.EntitiesDirectory}",
-                    $"{type}.yaml", SearchOption.AllDirectories).First()).Values.ToList()[0];
-            //_entityCache[type] = components;
+                    $"{type}.yaml", SearchOption.AllDirectories)
+                .First()).Values.ToList()[0];
             return components;
         }
     }

@@ -5,6 +5,8 @@ using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
+using ModusOperandi.ECS.Systems.SystemAttributes;
+using ModusOperandi.ECS.Systems.SystemInterfaces;
 using ModusOperandi.Rendering;
 using SFML.Graphics;
 
@@ -19,12 +21,12 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         public string Name { get; }
-        public EntityManager EntityManager { get; set; } = new();
+        public EntityManager EntityManager { get; set; } = new EntityManager();
+        public Entity[] Entities => EntityManager.CreatedEntities;
 
         private SpriteBatch _spriteBatch = new();
         public virtual void Draw(RenderTarget target, RenderStates states)
         {
-            
             _spriteBatch.Begin();
             foreach (var system in GetSystems<DrawSystemAttribute>()) (system as IDrawSystem)?.Draw(_spriteBatch);
             _spriteBatch.End();
@@ -89,17 +91,26 @@ namespace ModusOperandi.ECS.Scenes
             StartSystem<T>();
         }
         
-        public static SortedSet<ISystem> GetSystems<T>() where T : SystemGroupAttribute
+        public static HashSet<ISystem> GetSystems<T>() where T : SystemGroupAttribute
         {
             return _systems.Get<T>();
         }
 
-        public static SortedSet<ISystem> GetSystems<T>(T _) where T : SystemGroupAttribute
+        public static HashSet<ISystem> GetSystems<T>(T _) where T : SystemGroupAttribute
         {
             return GetSystems<T>();
         }
         
         private static SystemsManager _systems = new SystemsManager();
+        
+        private static class PerEventType<T> where T: IEntityEvent
+        {
+            public static readonly List<IListenSystem<T>> Listeners = new List<IListenSystem<T>>();
+        }
+        
+        public static List<IListenSystem<T>> GetListeners<T>() where T : IEntityEvent => PerEventType<T>.Listeners;
+        public static void RegisterListener<T>(IListenSystem<T> listener) where T : IEntityEvent
+            => PerEventType<T>.Listeners.Add(listener);
     }
 
     [PublicAPI]
@@ -124,14 +135,14 @@ namespace ModusOperandi.ECS.Scenes
         }
     }
 
-    public class SystemsManager : TypeKeyedCollection<SortedSet<ISystem>>
+    public class SystemsManager : TypeKeyedCollection<HashSet<ISystem>>
     {
-        public new SortedSet<ISystem> Get<TK>() where TK : SystemGroupAttribute
+        public new HashSet<ISystem> Get<TK>() where TK : SystemGroupAttribute
         {
             return base.Get<TK>();
         }
 
-        public new void Put<TK>(SortedSet<ISystem> element) where TK : SystemGroupAttribute
+        public new void Put<TK>(HashSet<ISystem> element) where TK : SystemGroupAttribute
         {
             base.Put<TK>(element);
         }

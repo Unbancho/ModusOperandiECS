@@ -1,111 +1,58 @@
+#define UNMANAGED
+
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.Scenes;
+using ModusOperandi.ECS.Systems.SystemInterfaces;
 using ModusOperandi.Rendering;
 
 namespace ModusOperandi.ECS.Systems
 {
-    [PublicAPI]
-    public interface ISystem
+    public interface IEntityEvent
     {
-        Scene Scene { get; set; }
-        List<ISystem> ComplementarySystems { get; }
-        bool Parallel { get; set; }
+        public Entity Sender { get; }
     }
 
-    [PublicAPI]
-    public interface IEntitySystem : ISystem
+    public abstract class UniqueSystem : ISystem
     {
-        Archetype[] Archetypes { get; }
-    }
+        public Scene Scene { get; set; }
+        public List<ISystem> ComplementarySystems { get; } = new List<ISystem>();
+        public bool Parallel { get; set; }
 
-    [PublicAPI]
-    public interface IComponentSystem<T> : ISystem where T : unmanaged
-    {
-        Span<T> Components { get; }
-    }
-
-    [PublicAPI]
-    public interface IUpdateSystem : ISystem
-    {
-        void Execute(float deltaTime);
-    }
-
-    [PublicAPI]
-    public interface IDrawSystem : ISystem
-    {
-        void Draw(SpriteBatch spriteBatch);
-    }
-
-    //TODO: Refactor, especially IComparable
-    [PublicAPI]
-    public abstract class Singleton : IComparable
-    {
-        public int CompareTo(object? obj)
+        public override int GetHashCode()
         {
-            if (obj == null) return 1;
-            var attribute = GetType().GetCustomAttribute<SystemGroupAttribute>();
-            if (attribute == null) return 1;
-            var t= ((dynamic)obj).GetType();
-            foreach (var d in attribute.SystemDependencies)
-            {
-                if (t == d) return 1;
-            }
-            attribute = ((Type) t).GetCustomAttribute<SystemGroupAttribute>();
-            if (attribute == null) return 1;
-            foreach (var d in attribute.SystemDependencies)
-            {
-                if (GetType() == d) return -1;
-            }
-            return Equals(obj) ? 0 : 1;
+            return GetType().GetHashCode();
         }
 
         public override bool Equals(object obj)
         {
-            return Equals(obj as Singleton);
+            return GetHashCode() == obj?.GetHashCode();
         }
-
-        public bool Equals(Singleton s)
-        {
-            if (ReferenceEquals(s, null)) return false;
-            if (ReferenceEquals(this, s)) return true;
-            return GetType() == s.GetType();
-        }
-
-        public static bool operator ==(Singleton left, Singleton right) => left?.Equals(right) ?? ReferenceEquals(right, null);
-        public static bool operator !=(Singleton left, Singleton right) => !(left == right);
     }
 
     [PublicAPI]
-    public abstract class UpdateEntitySystem : Singleton, IEntitySystem, IUpdateSystem
+    public abstract class EntitySystem<T> : UniqueSystem, IEntitySystem<T> where T : IArchetype, new()
     {
-        public Archetype[] Archetypes { get; }
-        public Scene Scene { get; set; }
-        public List<ISystem> ComplementarySystems { get; } = new ();
-        public bool Parallel { get; set; } = true;
-        
+        public Archetype[] Archetypes { get; protected set; }
+    }
+
+    [PublicAPI]
+    public abstract class UpdateEntitySystem<T> : EntitySystem<T>, IUpdateSystem where T : IArchetype, new()
+    {
+        protected UpdateEntitySystem()
+        {
+            var arch = new T();
+            Archetypes = new[] {new Archetype(arch.Signature, arch.AntiSignature)};
+        }
         
         protected abstract void ActOnEntity(Entity entity, float deltaTime);
 
-        // TODO: Refactor archetype dictionary stuff.
-        protected UpdateEntitySystem(Archetype[] archetypes)
-        {
-            Archetypes = archetypes;
-        }
-        
-        // TODO: Refactor archetype dictionary stuff.
-        protected UpdateEntitySystem(Archetype archetype)
-        {
-            Archetypes = new[] {archetype};
-        }
-        
-        // TODO: Refactor archetype dictionary stuff.
         public virtual void Execute(float deltaTime)
         {
             foreach (var archetype in Archetypes)
@@ -124,18 +71,15 @@ namespace ModusOperandi.ECS.Systems
                 ActOnEntity(entities[i], deltaTime);
         }
         
-        // ReSharper disable once HeapView.ClosureAllocation
+        // TODO: Find out why it's so much slower, maybe make it not so.
         private void ActOnEntitiesParallel(float deltaTime, Entity[] entities)
         {
             var degreeOfParallelism = Environment.ProcessorCount;
-            // ReSharper disable once HeapView.ObjectAllocation.Evident
             var tasks = new Task[degreeOfParallelism];
             for (var taskNumber = 0; taskNumber < degreeOfParallelism; taskNumber++)
             {
-                // ReSharper disable once HeapView.ClosureAllocation
                 var taskNumberCopy = taskNumber;
                 tasks[taskNumber] = Task.Factory.StartNew(
-                    // ReSharper disable once HeapView.DelegateAllocation
                     () =>
                     {
                         var max = entities.Length * (taskNumberCopy + 1) / degreeOfParallelism;
@@ -149,18 +93,25 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class ComponentSystem<T> : Singleton, IComponentSystem<T> where T : unmanaged
+    public abstract class ComponentSystem<T> : UniqueSystem, IComponentSystem<T> where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
     {
-        public Scene Scene { get; set; }
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
         protected uint NumberOfComponents => ComponentManager.AssignedComponents;
         public Span<T> Components => ((Span<T>)ComponentManager.ManagedComponents).Slice(1, (int)NumberOfComponents);
-        public List<ISystem> ComplementarySystems { get; } = new ();
-        public bool Parallel { get; set; }
     }
     
     [PublicAPI]
-    public abstract class UpdateComponentSystem<T> : ComponentSystem<T>, IUpdateSystem where T : unmanaged
+    public abstract class UpdateComponentSystem<T> : ComponentSystem<T>, IUpdateSystem  where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
     {
         public virtual void Execute(float deltaTime)
         {
@@ -169,11 +120,19 @@ namespace ModusOperandi.ECS.Systems
                 ActOnComponent(ref components[i], deltaTime);
         }
 
-        public abstract void ActOnComponent(ref T component, float deltaTime);
+        public virtual void ActOnComponent(ref T component, float deltaTime)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     [PublicAPI]
-    public abstract class DrawComponentSystem<T> : ComponentSystem<T>, IDrawSystem where T : unmanaged
+    public abstract class DrawComponentSystem<T> : ComponentSystem<T>, IDrawSystem  where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
     {
         public virtual void Draw(SpriteBatch spriteBatch)
         {
@@ -186,31 +145,49 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class SystemGroupAttribute : Attribute
+    public abstract class EventListenerSystem<T> : UniqueSystem, IEntitySystem, IListenSystem<T> where T : IEntityEvent
     {
-        protected SystemGroupAttribute(params Type[] systemDependencies)
+        public ConcurrentStack<T> Events { get; } = new ConcurrentStack<T>();
+
+        public EventListenerSystem()
         {
-            SystemDependencies = systemDependencies;
+            Scene.RegisterListener(this);
         }
 
-        public Type[] SystemDependencies { get; }
+        public Archetype[] Archetypes { get; protected set; }
+
+        public virtual bool ValidEvent(ref T e)
+        {
+            foreach (var archetype in Archetypes)
+            {
+                if((Ecs.EntityArchetypes[e.Sender] & archetype.Signature) == archetype.Signature) return true;
+            }
+
+            return false;
+        }
     }
 
     [PublicAPI]
-    public class UpdateSystemAttribute : SystemGroupAttribute
+    public abstract class EventEmitterSystem<T> : IEntitySystem, IEmitSystem<T> where T : IEntityEvent
     {
-        public UpdateSystemAttribute(params Type[] systemDependencies) : base(systemDependencies)
+        public virtual void Emit(T e)
         {
-            
+            foreach (var l in Scene.GetListeners<T>())
+            {
+                var els = (l as EventListenerSystem<T>)?.ValidEvent(ref e);
+                if (els != null)
+                {
+                    if(els.Value)
+                        l.Events.Push(e);
+                    continue;
+                }
+                l.Events.Push(e);
+            }
         }
-    }
 
-    [PublicAPI]
-    public class DrawSystemAttribute : SystemGroupAttribute
-    {
-        public DrawSystemAttribute(params Type[] systemDependencies) : base(systemDependencies)
-        {
-            
-        }
+        public Scene Scene { get; set; }
+        public List<ISystem> ComplementarySystems { get; } = new List<ISystem>();
+        public bool Parallel { get; set; }
+        public Archetype[] Archetypes { get; protected set; }
     }
 }
