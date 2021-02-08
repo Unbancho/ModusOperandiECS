@@ -5,7 +5,7 @@ namespace ModusOperandi.ECS.Utils
     [PublicAPI]
     public unsafe struct FixedString32
     {
-        public const int MaxSize = 32;
+        public const int MaxSize = 16; // 16*2
         // TODO: What I wanted to do simply does not work, we need a miracle.
         private fixed char _string[MaxSize];
 
@@ -18,7 +18,7 @@ namespace ModusOperandi.ECS.Utils
         {
             get
             {
-                fixed (char* s = _string) return new string(s);
+                fixed (char* s = _string) return new(s);
             }
 
             set
@@ -42,6 +42,6 @@ namespace ModusOperandi.ECS.Utils
 
         public override string ToString() => String;
         public static implicit operator string(FixedString32 fs) => fs.ToString();
-        public static explicit operator FixedString32(string s) => new FixedString32(s);
+        public static explicit operator FixedString32(string s) => new(s);
     }
 }

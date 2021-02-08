@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,26 +9,32 @@ using ModusOperandi.Utils.YAML;
 namespace ModusOperandi.ECS.EntityBuilding
 {
     [PublicAPI]
-    public class EntityBuilder
+    public static class EntityBuilder
     {
-        // TODO: Refactor to allow EntityManager to be private (PlaceEntity?), and to allow building entities without a scene.
-        public Entity BuildEntity(List<object> components, Scene scene)
+        // TODO: Refactor to allow EntityManager to be private (PlaceEntity?).
+        public static Entity BuildEntity(List<object> components, Scene scene)
         {
             var entity = scene.EntityManager.CreateEntity();
             foreach (var component in components)
             {
-                scene.AddComponentToEntity((dynamic) component, entity);
+                Ecs.RegisterComponent(entity, component);
             }
 
             return entity;
         }
 
-        public List<object> LoadEntityComponents(string type)
+        public static Dictionary<string, List<object>> EntityCache = new();
+        public static List<object> LoadEntityComponents(string type)
         {
+            if (EntityCache.TryGetValue(type, out var cachedComponents))
+            {
+                return cachedComponents;
+            }
             var components = Yaml.Deserialize<object, List<object>>(Directory
                 .GetFiles($"{Directories.EntitiesDirectory}",
                     $"{type}.yaml", SearchOption.AllDirectories)
                 .First()).Values.ToList()[0];
+            EntityCache[type] = components;
             return components;
         }
     }

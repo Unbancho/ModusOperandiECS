@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Security;
 using JetBrains.Annotations;
+using SFML;
 using SFML.Graphics;
 using SFML.System;
 
@@ -12,11 +15,11 @@ namespace ModusOperandi.Rendering
         private struct QueueItem
         {
             public uint Count;
-            public Texture Texture;
+            public IntPtr Texture;
         }
 
         // ReSharper disable once HeapView.ObjectAllocation.Evident
-        private readonly List<QueueItem> _textures = new List<QueueItem>();
+        private readonly List<QueueItem> _textures = new();
 
         private readonly int _max;
 
@@ -29,14 +32,14 @@ namespace ModusOperandi.Rendering
 
         // ReSharper disable once HeapView.ObjectAllocation.Evident
         private Vertex[] _vertices = new Vertex[100 * 4];
-        private Texture _activeTexture;
+        private IntPtr _activeTexture;
         private uint _queueCount;
 
         public void Begin()
         {
             Count = 0;
             _textures.Clear();
-            _activeTexture = null;
+            _activeTexture = IntPtr.Zero;
         }
 
         public void End()
@@ -47,7 +50,7 @@ namespace ModusOperandi.Rendering
         private void Enqueue()
         {
             if (_queueCount > 0)
-                _textures.Add(new QueueItem
+                _textures.Add(new()
                 {
                     Texture = _activeTexture,
                     Count = _queueCount
@@ -55,7 +58,7 @@ namespace ModusOperandi.Rendering
             _queueCount = 0;
         }
 
-        private int Create(Texture texture)
+        private int Create(IntPtr texture)
         {
             if (texture != _activeTexture)
             {
@@ -67,7 +70,7 @@ namespace ModusOperandi.Rendering
             {
                 if (_vertices.Length < _max)
                     Array.Resize(ref _vertices, Math.Min(_vertices.Length * 2, _max));
-                else throw new Exception("Too many items");
+                else throw new("Too many items");
             }
 
             _queueCount += 4;
@@ -76,11 +79,11 @@ namespace ModusOperandi.Rendering
 
         public void Draw(Sprite sprite)
         {
-            Draw(sprite.Texture, sprite.Position, sprite.TextureRect, sprite.Color, sprite.Scale, sprite.Origin,
+            Draw(sprite.Texture?.CPointer ?? IntPtr.Zero, sprite.Position, sprite.TextureRect, sprite.Color, sprite.Scale, sprite.Origin,
                  sprite.Rotation);
         }
-
-        private unsafe void Draw(Texture texture, Vector2f position, IntRect rec, Color color, Vector2f scale,
+        
+        public unsafe void Draw(IntPtr texture, Vector2f position, IntRect rec, Color color, Vector2f scale,
                                 Vector2f origin, float rotation = 0)
         {
 
@@ -134,19 +137,45 @@ namespace ModusOperandi.Rendering
                 ptr->Color = color;
             }
         }
-
+        
         public void Draw(RenderTarget target, RenderStates states)
         {
+            var windowPtr = ((ObjectBase) target).CPointer;
+            var marshaledStates = new MarshalData()
+            {
+                blendMode = states.BlendMode,
+                shader = states.Shader?.CPointer ?? IntPtr.Zero,
+                transform = states.Transform
+            };
             uint index = 0;
             foreach (var item in _textures)
             {
-                states.Texture = item.Texture;
-                target.Draw(_vertices, index, item.Count, PrimitiveType.Quads, states);
+                marshaledStates.texture = item.Texture;
+                unsafe
+                {
+                    fixed (Vertex* vertexPtr = _vertices)
+                    {
+                        sfRenderWindow_drawPrimitives(windowPtr, vertexPtr + index, item.Count, PrimitiveType.Quads, ref marshaledStates);
+                    }
+                }
+                
                 index += item.Count;
             }
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MarshalData
+        {
+            public BlendMode blendMode;
+            public Transform transform;
+            public IntPtr texture;
+            public IntPtr shader;
+        }
         
-        public unsafe void Draw(Texture texture, FloatRect rec, IntRect src, Color color)
+        [DllImport(CSFML.graphics, CallingConvention = CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
+        static extern unsafe void sfRenderWindow_drawPrimitives(IntPtr CPointer, Vertex* vertexPtr, uint vertexCount, PrimitiveType type, ref MarshalData renderStates);
+        
+        public unsafe void Draw(IntPtr texture, FloatRect rec, IntRect src, Color color)
         {
             var index = Create(texture);
 
@@ -191,14 +220,14 @@ namespace ModusOperandi.Rendering
                 width = (int)texture.Size.X;
                 height = (int)texture.Size.Y;
             }
-            Draw(texture, rec, new IntRect(0, 0, width, height), color);
+            Draw(texture.CPointer, rec, new(0, 0, width, height), color);
         }
 
         public void Draw(Texture texture, Vector2f pos, Color color)
         {
             var width = (int)texture.Size.X;
             var height = (int)texture.Size.Y;
-            Draw(texture, new FloatRect(pos.X, pos.Y, width, height), new IntRect(0, 0, width, height), color);
+            Draw(texture.CPointer, new(pos.X, pos.Y, width, height), new(0, 0, width, height), color);
         }
     }
 }

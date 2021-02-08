@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
@@ -7,14 +8,38 @@ using ModusOperandi.ECS.Scenes;
 
 namespace ModusOperandi.ECS
 {
-
     [PublicAPI]
     public static class Ecs
     {
-        public static ulong MaxEntities = 1_000_000;
-        public static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
+        public const ulong MaxEntities = 10_000;
+        private static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
 
-        public static ComponentManager<T> GetComponentManager<T>() where T : unmanaged
+        public static void RegisterComponent<T>(Entity e, T component) where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
+        {
+            GetComponentManager<T>().AddComponent(component, e);
+            EntityArchetypes[e.Index] |= IComponentManager<T>.Signature;
+            _dirty = true;
+        }
+
+        public static void RegisterComponent(Entity e, object component)
+        {
+            RegisterComponent(e, (dynamic) component);
+        }
+
+        public static ulong GetEntityArchetype(Entity e) => EntityArchetypes[e];
+        
+
+        public static ComponentManager<T> GetComponentManager<T>() where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
         {
             var componentManager = PerType<T>.ComponentManager;
             if (componentManager != null) return componentManager;
@@ -22,66 +47,83 @@ namespace ModusOperandi.ECS
             return PerType<T>.ComponentManager;
         }
 
-        private static void SetComponentManager<T>(ComponentManager<T> componentManager) where T : unmanaged
+        public static void SetComponentManager<T>(ComponentManager<T> componentManager) where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
         {
             PerType<T>.ComponentManager = componentManager;
+            _componentManagers.Add(componentManager);
         }
 
-        private static class PerType<T> where T : unmanaged
+        public static IComponentManager[] GetComponentManagers() => _componentManagers.ToArray();
+
+        private static class PerType<T> where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
         {
             public static ComponentManager<T> ComponentManager;
         }
-
-        public static Entity[] Query(Archetype archetype)
+        
+        
+        private static List<IComponentManager> _componentManagers = new();
+        public static Span<Entity> Query(Archetype archetype, Scene scene=null)
         {
-            var entities = new List<Entity>();
-            var indices = GetComponentIndices(archetype.Signature);
-            for (var entity = 0u; entity < MaxEntities; entity++)
+            static Entity[] SmallestGroup(Archetype a, Scene s = null)
             {
-                if (EntityMatches(entity, indices)) entities.Add(entity);
+                var sceneEntities = s?.Entities ?? Array.Empty<Entity>();
+                var entitiesWithRarest = _componentManagers[a.Indices[^1]].EntitiesWithComponent;
+                if (entitiesWithRarest.Length < sceneEntities.Length || sceneEntities.Length == 0)
+                {
+                    return entitiesWithRarest;
+                }
+
+                return sceneEntities;
             }
 
-            return entities.ToArray();
+            var smallestGroup = SmallestGroup(archetype, scene);
+            return Query(archetype, smallestGroup);
         }
-        
-        // TODO: Change loop to iterate a collection of Entities.
-        public static Entity[] Query(Archetype archetype, Scene scene)
+
+        private static Dictionary<Archetype, Entity[]> _queryCache = new();
+        private static bool _dirty;
+        public static Span<Entity> Query(Archetype archetype, Entity[] entitiesToQuery)
         {
-            var entities = new List<Entity>();
-            var indices = GetComponentIndices(archetype.Signature);
-            for (var entity = 0u; entity < scene.EntityManager.NumberOfAliveEntities; entity++)
+            if (!_dirty && _queryCache.TryGetValue(archetype, out var cachedEntities))
+                return cachedEntities;
+            Span<Entity> entities = new Entity[entitiesToQuery.Length];
+            var filteredEntities = 0;
+            foreach (var entity in entitiesToQuery)
             {
-                if (EntityMatches(entity, indices)) entities.Add(entity);
+                if (EntityMatches(entity, archetype.Indices, archetype.AntiIndices))
+                {
+                    entities[filteredEntities++] = entity;
+                }
             }
 
-            return entities.ToArray();
+            var r = entities.Slice(0, filteredEntities);
+            _queryCache[archetype] = r.ToArray();
+            return r;
         }
-        
-        private static bool EntityMatches(uint entity, int[] indices)
+
+        public static bool EntityMatches(uint entity, int[] indices, int[] antiIndices)
         {
+            var entityArchetype = EntityArchetypes[entity];
             for (var i = 0; i < indices.Length; i++)
             {
-                if (!EntityHasComponent(entity, indices[i])) return false;
+                if ((entityArchetype & 1u << indices[i]) == 0) return false;
+            }
+
+            for (var i = 0; i < antiIndices.Length; i++)
+            {
+                if ((entityArchetype & 1u << antiIndices[i]) != 0) return false;
             }
             return true;
-        }
-        
-        private static Dictionary<ulong, int[]> _signatureIndices = new Dictionary<ulong, int[]>();
-        private static int[] GetComponentIndices(ulong signature)
-        {
-            if (_signatureIndices.TryGetValue(signature, out var idxs)) return idxs;
-            var indices = new List<int>();
-            for (var i = 0; signature >= 1u << i; i++)
-                if ((signature & (1u << i)) > 0)
-                    indices.Add(i);
-            var arr = indices.ToArray();
-            _signatureIndices[signature] = arr;
-            return arr;
-        }
-
-        public static bool EntityHasComponent(uint entity, int componentIndex)
-        {
-            return (EntityArchetypes[entity] & 1u << componentIndex) != 0;
         }
     }
 
@@ -99,6 +141,6 @@ namespace ModusOperandi.ECS
             ActiveScenes.Remove(scene);
         }
 
-        public HashSet<Scene> ActiveScenes { get; } = new HashSet<Scene>();
+        public HashSet<Scene> ActiveScenes { get; } = new();
     }
 }

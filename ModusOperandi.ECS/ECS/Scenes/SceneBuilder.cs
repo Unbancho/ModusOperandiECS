@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using JetBrains.Annotations;
+using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 
 namespace ModusOperandi.ECS.Scenes
@@ -24,18 +26,27 @@ namespace ModusOperandi.ECS.Scenes
                 
             }
             */
-            var entityBuilder = new EntityBuilder();
             foreach (var entityDict in (List<object>) dict["entities"])
             {
                 var entityName = (string) (entityDict as Dictionary<object, object>)?.Keys.First();
                 var components = (List<object>) (entityDict as Dictionary<object, object>)?[entityName];
-                var defaultComponents = entityBuilder.LoadEntityComponents(entityName);
-                entityBuilder.BuildEntity(
+                var defaultComponents = EntityBuilder.LoadEntityComponents(entityName);
+                var entity = EntityBuilder.BuildEntity(
                     MergeComponentLists(defaultComponents, components), scene);
+                if (EntityRegistry.TryGetValue((scene, entityName!), out var entities))
+                {
+                    entities.Add(entity);
+                }
+                else
+                {
+                    EntityRegistry[(scene, entityName)] = new() {entity};
+                }
             }
 
             return scene;
         }
+
+        public static Dictionary<(Scene, string), List<Entity>> EntityRegistry = new();
 
         private static List<object> MergeComponentLists(List<object> defaultComponents, List<object> updatedComponents)
         {
@@ -66,6 +77,13 @@ namespace ModusOperandi.ECS.Scenes
             {
                 foreach (var member in members)
                 {
+                    var isProperty = member as PropertyInfo != null;
+                    if (isProperty)
+                    {
+                        var hasSetMethod = member.GetSetMethod() != null;
+                        var hasGetMethod = member.GetGetMethod() != null;
+                        if(!hasGetMethod || !hasSetMethod) continue;
+                    }
                     var defaultValue = member.GetValue(@default);
                     var updatedValue = member.GetValue(updated);
                     if (updatedValue != defaultValue)

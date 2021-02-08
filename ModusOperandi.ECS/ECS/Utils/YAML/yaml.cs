@@ -13,7 +13,7 @@ namespace ModusOperandi.Utils.YAML
     public static class Yaml
     {
         // ReSharper disable once HeapView.ObjectAllocation.Evident
-        public static readonly DeserializerBuilder DeserializerBuilder = new DeserializerBuilder();
+        public static readonly DeserializerBuilder DeserializerBuilder = new();
 
         private static IDeserializer _deserializer;
 

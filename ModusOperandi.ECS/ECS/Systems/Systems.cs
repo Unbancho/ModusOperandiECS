@@ -1,5 +1,3 @@
-#define UNMANAGED
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -22,7 +20,7 @@ namespace ModusOperandi.ECS.Systems
     public abstract class UniqueSystem : ISystem
     {
         public Scene Scene { get; set; }
-        public List<ISystem> ComplementarySystems { get; } = new List<ISystem>();
+        public List<ISystem> ComplementarySystems { get; } = new();
         public bool Parallel { get; set; }
 
         public override int GetHashCode()
@@ -48,10 +46,10 @@ namespace ModusOperandi.ECS.Systems
         protected UpdateEntitySystem()
         {
             var arch = new T();
-            Archetypes = new[] {new Archetype(arch.Signature, arch.AntiSignature)};
+            Archetypes = new[] {new Archetype(arch.Signature, arch.AntiSignature, arch.Indices, arch.AntiIndices)};
         }
         
-        protected abstract void ActOnEntity(Entity entity, float deltaTime);
+        public abstract void ActOnEntity(Entity entity, float deltaTime);
 
         public virtual void Execute(float deltaTime)
         {
@@ -65,15 +63,17 @@ namespace ModusOperandi.ECS.Systems
             }
         }
 
-        private void ActOnEntities(float deltaTime, Entity[] entities)
+        public void ActOnEntities(float deltaTime, Span<Entity> entities)
         {
             for (var i = 0; i < entities.Length; i++)
                 ActOnEntity(entities[i], deltaTime);
         }
         
         // TODO: Find out why it's so much slower, maybe make it not so.
-        private void ActOnEntitiesParallel(float deltaTime, Entity[] entities)
+        private void ActOnEntitiesParallel(float deltaTime, Span<Entity> entitiesSpan)
         {
+            var entities = entitiesSpan.ToArray();
+            
             var degreeOfParallelism = Environment.ProcessorCount;
             var tasks = new Task[degreeOfParallelism];
             for (var taskNumber = 0; taskNumber < degreeOfParallelism; taskNumber++)
@@ -147,9 +147,9 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public abstract class EventListenerSystem<T> : UniqueSystem, IEntitySystem, IListenSystem<T> where T : IEntityEvent
     {
-        public ConcurrentStack<T> Events { get; } = new ConcurrentStack<T>();
+        public ConcurrentStack<T> Events { get; } = new();
 
-        public EventListenerSystem()
+        protected EventListenerSystem()
         {
             Scene.RegisterListener(this);
         }
@@ -160,7 +160,7 @@ namespace ModusOperandi.ECS.Systems
         {
             foreach (var archetype in Archetypes)
             {
-                if((Ecs.EntityArchetypes[e.Sender] & archetype.Signature) == archetype.Signature) return true;
+                if((Ecs.GetEntityArchetype(e.Sender) & archetype.Signature) == archetype.Signature) return true;
             }
 
             return false;
@@ -186,7 +186,7 @@ namespace ModusOperandi.ECS.Systems
         }
 
         public Scene Scene { get; set; }
-        public List<ISystem> ComplementarySystems { get; } = new List<ISystem>();
+        public List<ISystem> ComplementarySystems { get; } = new();
         public bool Parallel { get; set; }
         public Archetype[] Archetypes { get; protected set; }
     }

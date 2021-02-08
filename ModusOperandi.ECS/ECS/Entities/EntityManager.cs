@@ -8,9 +8,9 @@ namespace ModusOperandi.ECS.Entities
     public class EntityManager
     {
         private static ulong _minimumFreeIndices = Ecs.MaxEntities;
-        private readonly List<uint> _freeIndices = new List<uint>();
-        private readonly List<byte> _generation = new List<byte>();
-        private readonly List<Entity> _createdEntities = new List<Entity>();
+        private readonly List<uint> _freeIndices = new();
+        private readonly List<byte> _generation = new();
+        private readonly List<Entity> _createdEntities = new();
 
         public Entity CreateEntity()
         {

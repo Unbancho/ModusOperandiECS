@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
@@ -8,10 +8,17 @@
     <ApplicationIcon />
     <StartupObject />
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>TRACE;UNMANAGED</DefineConstants>
+  </PropertyGroup>
     <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2020.2.0-eap" />
     <PackageReference Include="SFML.Net" Version="2.5.0" />
     <PackageReference Include="YamlDotNet" Version="8.1.2" />
   </ItemGroup>
+    <ItemGroup>
+      <Compile Remove="ECS\Utils\Dugong.cs" />
+    </ItemGroup>
 
 </Project>

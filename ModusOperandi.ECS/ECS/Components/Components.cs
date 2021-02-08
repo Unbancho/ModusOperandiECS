@@ -1,36 +1,88 @@
 using System;
 using JetBrains.Annotations;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using ModusOperandi.ECS.Entities;
+
+
 
 namespace ModusOperandi.ECS.Components
 {
-    internal static class SignatureCounter
+    public interface IEntityMap
     {
-        public static int Counter;
+        uint this[Entity entity] { get; set; }
+    }
+    
+    public enum ComponentStorageOptions
+    {
+        Fast,
+        Light
     }
 
-    [PublicAPI]
-    public class ComponentManager<T> where T : unmanaged
+    public class EntityMapFast : IEntityMap
     {
-        public readonly int Index;
-
-        // ReSharper disable once StaticMemberInGenericType
-        public static ulong Signature { get; private set; }
-
-        private readonly Dictionary<Entity, uint> _map = new Dictionary<Entity, uint>();
-        private readonly List<Entity> _reverseMap = new List<Entity>{0};
-
-        public ComponentManager()
+        private readonly uint[] _map = new uint[Ecs.MaxEntities];
+        public uint this[Entity entity]
         {
-            Index = ++SignatureCounter.Counter;
-            Signature = 1u << Index;
-            ManagedComponents = new T[1];
+            get => _map[entity];
+            set => _map[entity] = value;
         }
+    }
 
-        public T[] ManagedComponents;
+    public class EntityMapLight : IEntityMap
+    {
+        private readonly Dictionary<Entity, uint> _map = new();
+        public uint this[Entity entity]
+        {
+            get => _map.TryGetValue(entity, out var idx) ? idx : 0;
+            set => _map[entity] = value;
+        }
+    }
 
-        public uint AssignedComponents;
+    public interface IComponentManager
+    {
+        internal static int Counter { get; set; }
+        uint LookUp(Entity entity);
+        Entity ReverseLookUp(uint index);
+        public Entity[] EntitiesWithComponent { get; }
+        public uint AssignedComponents { get;}
+        public object[] ManagedComponents { get; }
+    }
+    
+    [PublicAPI]
+    [SuppressMessage("ReSharper", "StaticMemberInGenericType")]
+    public interface IComponentManager<T> : IComponentManager where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
+    {
+        static int Index { get; protected set; }
+        static ulong Signature => 1u << Index;
+        void AddComponent(T component, Entity entity);
+        ref T GetComponent(Entity entity);
+        public new T[] ManagedComponents { get; }
+    }
+    
+    
+    [PublicAPI]
+    [SuppressMessage("ReSharper", "StaticMemberInGenericType")]
+    public class ComponentManager<T> : IComponentManager<T> where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
+    {
+        private IEntityMap _map;
+        private readonly List<Entity> _reverseMap = new() {0};
+
+        public ref T GetComponent(Entity entity) => ref ManagedComponents[LookUp(entity)];
+        public T[] ManagedComponents { get; private set; }
+        object[] IComponentManager.ManagedComponents => ManagedComponents.Cast<object>().ToArray();
+        public uint AssignedComponents { get; private set; }
 
         public void AddComponent(T component, Entity entity)
         {
@@ -46,48 +98,164 @@ namespace ModusOperandi.ECS.Components
             ManagedComponents[_map[entity]] = component;
         }
 
-        public uint LookUp(Entity entity) => _map.GetValueOrDefault<Entity, uint>(entity, 0);
-        
-        public Entity ReverseLookUp(uint index) => _reverseMap[(int)index];
-        
-        public ref T GetComponent(Entity entity) => ref ManagedComponents[LookUp(entity)];
+        public uint LookUp(Entity entity) => _map[entity];
 
-        public enum SortOption
+        public Entity ReverseLookUp(uint index) => _reverseMap[(int)index];
+
+        public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
+
+        public ComponentManager(ComponentStorageOptions options = ComponentStorageOptions.Fast)
         {
-            Insertion,
-            [Obsolete("Not quick.")]
-            Quick
-        }
-        
-        public void SortComponents(IComparer<T> comparer, SortOption sortOption = SortOption.Insertion)
-        {
-            Span<T> componentArray = ManagedComponents;
-            componentArray = componentArray.Slice(1, (int)AssignedComponents);
-            switch (sortOption)
+            ManagedComponents = new T[1];
+            _map = options switch
             {
-                case SortOption.Insertion:
-                    InsertionSort(componentArray, comparer);
-                    break;
-                case SortOption.Quick:
-                    QuickSort(componentArray, comparer);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(sortOption), sortOption, null);
-            }
+                ComponentStorageOptions.Fast => new EntityMapFast(),
+                ComponentStorageOptions.Light => new EntityMapLight(),
+                _ => throw new ArgumentOutOfRangeException(nameof(options), options, null)
+            };
         }
-        
-        private void InsertionSort(Span<T> arr, IComparer<T> helper)
+
+        static ComponentManager()
         {
-            for (var j = 0; j < arr.Length-1; j++) {
-                for (var i = 0; i < arr.Length-1; i++)
+            IComponentManager<T>.Index = IComponentManager.Counter++;
+        }
+
+        [Obsolete]
+        public void SortComponents(Comparison<T> comparison)
+        {
+           var componentArray = ((Span<T>)ManagedComponents).Slice(1, (int) AssignedComponents);
+           
+        }
+    }
+    
+/*
+    [PublicAPI]
+    [Obsolete]
+    public struct ValueComponentManager<T> : IComponentManager<T> where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
+    {
+        public bool Initialized;
+        
+        public uint LookUp(Entity entity) => entity;
+        public Entity ReverseLookUp(uint index) => index;
+
+        private unsafe fixed uint _entitiesWithComponent[(int)Ecs.MaxEntities];
+        public unsafe Entity[] EntitiesWithComponent
+        {
+            get
+            {
+                var arr = new Entity[AssignedComponents];
+                for (var i = 0; i < AssignedComponents; i++)
                 {
-                    if (helper.Compare(arr[i], arr[i+1]) < 0) continue;
-                    SwapComponents(i+1, i+2);
+                    arr[i] = _entitiesWithComponent[i];
                 }
+
+                return arr;
             }
         }
         
-        // TODO: Make this actually quick I guess, Insertion rules for now.
+        public uint AssignedComponents { get; private set; }
+        public unsafe void AddComponent(T component, Entity entity)
+        {
+            AssignedComponents++;
+            _managedComponents[entity] = (int) &component;
+        }
+
+        public unsafe ref T GetComponent(Entity entity)
+        {
+            return ref *(T*) _managedComponents[entity];
+        }
+
+        private unsafe fixed int _managedComponents[(int)Ecs.MaxEntities];
+        public unsafe T[] ManagedComponents
+        {
+            get
+            {
+                var arr = new T[AssignedComponents];
+                var a = AssignedComponents;
+                for (var i = 1; i < a; i++)
+                {
+                    var p = (T*) _managedComponents[i];
+                    if (p == default)
+                    {
+                        a++;
+                        continue;
+                    }
+                    arr[i] = *p;
+                }
+                return arr;
+            }
+        }
+
+        object[] IComponentManager.ManagedComponents => ManagedComponents.Cast<object>().ToArray();
+    
+        static ValueComponentManager()
+        {
+            IComponentManager<T>.Signature = 1u << ++SignatureCounter.Counter;
+        }
+        
+        
+        [Obsolete]
+        public void SortComponents(Comparison<T> comparison)
+        {
+            var componentArray = ((Span<T>)ManagedComponents).Slice(1, (int) AssignedComponents);
+           
+        }
+    }
+*/
+
+    [AttributeUsage(AttributeTargets.Struct)]
+    public class Component : Attribute
+    {
+    }
+
+    public static class ComponentExtensions
+    {
+        public static ulong GetComponentSignature<T>(this T _) where T :
+#if UNMANAGED
+            unmanaged
+#else
+            struct
+#endif
+        {
+            return IComponentManager<T>.Signature;
+        }
+        
+        public static int GetComponentIndex<T>(this T _) where T :
+#if UNMANAGED
+            unmanaged
+#else
+            struct
+#endif
+        {
+            return IComponentManager<T>.Index;
+        }
+    }
+    
+    internal static class SortHelper<T> where T: struct
+    {
+    }
+}
+
+
+
+/*
+private void Destroy(uint i)
+{
+    var last = NumberOfInstances - 1;
+    var entity = Entities[i];
+    var lastEntity = Entities[last];
+    Entities[i] = Entities[last];
+    ManagedComponents[i] = ManagedComponents[last];
+    _map[lastEntity] = i;
+    _map.Remove(entity);
+    NumberOfInstances--;
+}
+
         [Obsolete]
         private void QuickSort(Span<T> array, IComparer<T> helper)
         {
@@ -116,35 +284,4 @@ namespace ModusOperandi.ECS.Components
                 QuickSort(array, helper);
             }
         }
-
-        private void SwapComponents(int idxA, int idxB)
-        {
-            Span<T> arr = ManagedComponents;
-            (arr[idxA], arr[idxB]) = (arr[idxB], arr[idxA]);
-            var entityA = _reverseMap[idxA];
-            var entityB = _reverseMap[idxB];
-            (_map[entityA], _map[entityB]) = (_map[entityB], _map[entityA]);
-            (_reverseMap[idxA], _reverseMap[idxB]) = (entityB, entityA);
-        }
-    }
-
-    [AttributeUsage(AttributeTargets.Struct)]
-    public class Component : Attribute
-    {
-    }
-}
-
-
-/*
-private void Destroy(uint i)
-{
-    var last = NumberOfInstances - 1;
-    var entity = Entities[i];
-    var lastEntity = Entities[last];
-    Entities[i] = Entities[last];
-    ManagedComponents[i] = ManagedComponents[last];
-    _map[lastEntity] = i;
-    _map.Remove(entity);
-    NumberOfInstances--;
-}
 */

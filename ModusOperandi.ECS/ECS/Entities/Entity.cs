@@ -1,5 +1,3 @@
-#define UNMANAGED
-
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 
@@ -10,7 +8,7 @@ namespace ModusOperandi.ECS.Entities
     public readonly struct Entity
     {
         public static implicit operator uint(Entity entity) => entity.ID;
-        public static implicit operator Entity(uint id) => new Entity(id);
+        public static implicit operator Entity(uint id) => new(id);
 
         private const byte EntityIndexBits = 20;
         private const byte EntityGenerationBits = 32-EntityIndexBits;

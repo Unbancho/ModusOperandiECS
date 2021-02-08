@@ -21,7 +21,7 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         public string Name { get; }
-        public EntityManager EntityManager { get; set; } = new EntityManager();
+        public EntityManager EntityManager { get; set; } = new();
         public Entity[] Entities => EntityManager.CreatedEntities;
 
         private SpriteBatch _spriteBatch = new();
@@ -35,14 +35,7 @@ namespace ModusOperandi.ECS.Scenes
 
         public Entity PlaceEntity(string type)
         {
-            var entityBuilder = new EntityBuilder();
-            return entityBuilder.BuildEntity(entityBuilder.LoadEntityComponents(type), this);
-        }
-
-        public virtual void AddComponentToEntity<T>(T component, Entity entity) where T : unmanaged
-        {
-            Ecs.GetComponentManager<T>().AddComponent(component, entity);
-            Ecs.EntityArchetypes[entity.Index] |= IComponentManager<T>.Signature;
+            return EntityBuilder.BuildEntity(EntityBuilder.LoadEntityComponents(type), this);
         }
 
         public abstract void Initialize();
@@ -101,11 +94,11 @@ namespace ModusOperandi.ECS.Scenes
             return GetSystems<T>();
         }
         
-        private static SystemsManager _systems = new SystemsManager();
+        private static SystemsManager _systems = new();
         
         private static class PerEventType<T> where T: IEntityEvent
         {
-            public static readonly List<IListenSystem<T>> Listeners = new List<IListenSystem<T>>();
+            public static readonly List<IListenSystem<T>> Listeners = new();
         }
         
         public static List<IListenSystem<T>> GetListeners<T>() where T : IEntityEvent => PerEventType<T>.Listeners;
@@ -120,7 +113,7 @@ namespace ModusOperandi.ECS.Scenes
         {
             var e = PerType<TK>.Element;
             if (e != null) return e;
-            Put<TK>(new T());
+            Put<TK>(new());
             return PerType<TK>.Element;
         }
         
