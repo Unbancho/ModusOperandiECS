@@ -40,6 +40,7 @@ namespace ModusOperandi.ECS.Components
         }
     }
 
+    [PublicAPI]
     public interface IComponentManager
     {
         internal static int Counter { get; set; }
@@ -47,7 +48,7 @@ namespace ModusOperandi.ECS.Components
         Entity ReverseLookUp(uint index);
         public Entity[] EntitiesWithComponent { get; }
         public uint AssignedComponents { get;}
-        public object[] ManagedComponents { get; }
+        public object[] Components { get; }
     }
     
     [PublicAPI]
@@ -63,7 +64,27 @@ namespace ModusOperandi.ECS.Components
         static ulong Signature => 1u << Index;
         void AddComponent(T component, Entity entity);
         ref T GetComponent(Entity entity);
-        public new T[] ManagedComponents { get; }
+        public new Components<T> Components { get; }
+    }
+    
+    
+    public readonly ref struct Components<T> where T :
+#if UNMANAGED
+        unmanaged
+#else
+        struct
+#endif
+    {
+        public readonly Span<T> ComponentArray;
+        private readonly IEntityMap _map;
+            
+        public Components(Span<T> arr, IEntityMap map, int nComponents)
+        {
+            _map = map;
+            ComponentArray = arr.Slice(1, nComponents);
+        }
+
+        public ref T Get(Entity e) => ref ComponentArray[(int)_map[e]];
     }
     
     
@@ -79,9 +100,10 @@ namespace ModusOperandi.ECS.Components
         private IEntityMap _map;
         private readonly List<Entity> _reverseMap = new() {0};
 
-        public ref T GetComponent(Entity entity) => ref ManagedComponents[LookUp(entity)];
-        public T[] ManagedComponents { get; private set; }
-        object[] IComponentManager.ManagedComponents => ManagedComponents.Cast<object>().ToArray();
+        public ref T GetComponent(Entity entity) => ref _managedComponents[LookUp(entity)];
+        public Components<T> Components => new (_managedComponents, _map, (int)AssignedComponents);
+        private T[] _managedComponents;
+        object[] IComponentManager.Components => _managedComponents.Cast<object>().ToArray();
         public uint AssignedComponents { get; private set; }
 
         public void AddComponent(T component, Entity entity)
@@ -89,13 +111,13 @@ namespace ModusOperandi.ECS.Components
             AssignedComponents++;
             _map[entity] = AssignedComponents;
             _reverseMap.Add(entity);
-            if (_map[entity] >= ManagedComponents.Length)
+            if (_map[entity] >= _managedComponents.Length)
             {
-                var managedComponents = ManagedComponents;
-                Array.Resize(ref managedComponents, ManagedComponents.Length*2);
-                ManagedComponents = managedComponents;
+                var managedComponents = _managedComponents;
+                Array.Resize(ref managedComponents, _managedComponents.Length*2);
+                _managedComponents = managedComponents;
             }
-            ManagedComponents[_map[entity]] = component;
+            _managedComponents[_map[entity]] = component;
         }
 
         public uint LookUp(Entity entity) => _map[entity];
@@ -106,7 +128,7 @@ namespace ModusOperandi.ECS.Components
 
         public ComponentManager(ComponentStorageOptions options = ComponentStorageOptions.Fast)
         {
-            ManagedComponents = new T[1];
+            _managedComponents = new T[1];
             _map = options switch
             {
                 ComponentStorageOptions.Fast => new EntityMapFast(),
@@ -119,100 +141,14 @@ namespace ModusOperandi.ECS.Components
         {
             IComponentManager<T>.Index = IComponentManager.Counter++;
         }
-
-        [Obsolete]
-        public void SortComponents(Comparison<T> comparison)
-        {
-           var componentArray = ((Span<T>)ManagedComponents).Slice(1, (int) AssignedComponents);
-           
-        }
     }
-    
-/*
-    [PublicAPI]
-    [Obsolete]
-    public struct ValueComponentManager<T> : IComponentManager<T> where T :
-#if UNMANAGED
-        unmanaged
-#else
-        struct
-#endif
-    {
-        public bool Initialized;
-        
-        public uint LookUp(Entity entity) => entity;
-        public Entity ReverseLookUp(uint index) => index;
-
-        private unsafe fixed uint _entitiesWithComponent[(int)Ecs.MaxEntities];
-        public unsafe Entity[] EntitiesWithComponent
-        {
-            get
-            {
-                var arr = new Entity[AssignedComponents];
-                for (var i = 0; i < AssignedComponents; i++)
-                {
-                    arr[i] = _entitiesWithComponent[i];
-                }
-
-                return arr;
-            }
-        }
-        
-        public uint AssignedComponents { get; private set; }
-        public unsafe void AddComponent(T component, Entity entity)
-        {
-            AssignedComponents++;
-            _managedComponents[entity] = (int) &component;
-        }
-
-        public unsafe ref T GetComponent(Entity entity)
-        {
-            return ref *(T*) _managedComponents[entity];
-        }
-
-        private unsafe fixed int _managedComponents[(int)Ecs.MaxEntities];
-        public unsafe T[] ManagedComponents
-        {
-            get
-            {
-                var arr = new T[AssignedComponents];
-                var a = AssignedComponents;
-                for (var i = 1; i < a; i++)
-                {
-                    var p = (T*) _managedComponents[i];
-                    if (p == default)
-                    {
-                        a++;
-                        continue;
-                    }
-                    arr[i] = *p;
-                }
-                return arr;
-            }
-        }
-
-        object[] IComponentManager.ManagedComponents => ManagedComponents.Cast<object>().ToArray();
-    
-        static ValueComponentManager()
-        {
-            IComponentManager<T>.Signature = 1u << ++SignatureCounter.Counter;
-        }
-        
-        
-        [Obsolete]
-        public void SortComponents(Comparison<T> comparison)
-        {
-            var componentArray = ((Span<T>)ManagedComponents).Slice(1, (int) AssignedComponents);
-           
-        }
-    }
-*/
 
     [AttributeUsage(AttributeTargets.Struct)]
     public class Component : Attribute
     {
     }
 
+    [PublicAPI]
     public static class ComponentExtensions
     {
         public static ulong GetComponentSignature<T>(this T _) where T :
@@ -234,10 +170,22 @@ namespace ModusOperandi.ECS.Components
         {
             return IComponentManager<T>.Index;
         }
-    }
-    
-    internal static class SortHelper<T> where T: struct
-    {
+        
+        public static T[] GetComponents<T>(this IComponentManager<T> manager, params Entity[] entities) where T :
+#if UNMANAGED
+            unmanaged
+#else
+            struct
+#endif
+        {
+            var components = new T[entities.Length];
+            for (var i = 0; i < entities.Length; i++)
+            {
+                components[i] = manager.GetComponent(entities[i]);
+            }
+
+            return components;
+        }
     }
 }
 

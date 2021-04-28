@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
@@ -11,7 +12,7 @@ namespace ModusOperandi.ECS
     [PublicAPI]
     public static class Ecs
     {
-        public const ulong MaxEntities = 10_000;
+        public const ulong MaxEntities = 1_000_000;
         private static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
 
         public static void RegisterComponent<T>(Entity e, T component) where T :
@@ -76,8 +77,18 @@ namespace ModusOperandi.ECS
         {
             static Entity[] SmallestGroup(Archetype a, Scene s = null)
             {
+                var indices = a.Indices;
+                var min = uint.MaxValue;
+                var idx = indices.Length - 1;
+                for (var i = 0; i < indices.Length; i++)
+                {
+                    var n = _componentManagers[indices[i]].AssignedComponents;
+                    if (min <= n) continue;
+                    min = n;
+                    idx = i;
+                }
                 var sceneEntities = s?.Entities ?? Array.Empty<Entity>();
-                var entitiesWithRarest = _componentManagers[a.Indices[^1]].EntitiesWithComponent;
+                var entitiesWithRarest = _componentManagers[indices[idx]].EntitiesWithComponent;
                 if (entitiesWithRarest.Length < sceneEntities.Length || sceneEntities.Length == 0)
                 {
                     return entitiesWithRarest;
@@ -90,6 +101,7 @@ namespace ModusOperandi.ECS
             return Query(archetype, smallestGroup);
         }
 
+        //TODO: Make dirty only when necessary and make not dirty work.
         private static Dictionary<Archetype, Entity[]> _queryCache = new();
         private static bool _dirty;
         public static Span<Entity> Query(Archetype archetype, Entity[] entitiesToQuery)
@@ -111,7 +123,9 @@ namespace ModusOperandi.ECS
             return r;
         }
 
-        public static bool EntityMatches(uint entity, int[] indices, int[] antiIndices)
+        [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]
+        [SuppressMessage("ReSharper", "LoopCanBeConvertedToQuery")]
+        public static bool EntityMatches(uint entity, Span<int> indices, Span<int> antiIndices)
         {
             var entityArchetype = EntityArchetypes[entity];
             for (var i = 0; i < indices.Length; i++)

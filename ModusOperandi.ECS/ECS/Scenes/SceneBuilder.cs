@@ -33,20 +33,20 @@ namespace ModusOperandi.ECS.Scenes
                 var defaultComponents = EntityBuilder.LoadEntityComponents(entityName);
                 var entity = EntityBuilder.BuildEntity(
                     MergeComponentLists(defaultComponents, components), scene);
-                if (EntityRegistry.TryGetValue((scene, entityName!), out var entities))
+                if (_entityRegistry.TryGetValue((scene, entityName!), out var entities))
                 {
                     entities.Add(entity);
                 }
                 else
                 {
-                    EntityRegistry[(scene, entityName)] = new() {entity};
+                    _entityRegistry[(scene, entityName)] = new() {entity};
                 }
             }
 
             return scene;
         }
 
-        public static Dictionary<(Scene, string), List<Entity>> EntityRegistry = new();
+        private static Dictionary<(Scene, string), List<Entity>> _entityRegistry = new();
 
         private static List<object> MergeComponentLists(List<object> defaultComponents, List<object> updatedComponents)
         {

@@ -23,10 +23,10 @@ namespace ModusOperandi.ECS.EntityBuilding
             return entity;
         }
 
-        public static Dictionary<string, List<object>> EntityCache = new();
+        private static Dictionary<string, List<object>> _entityCache = new();
         public static List<object> LoadEntityComponents(string type)
         {
-            if (EntityCache.TryGetValue(type, out var cachedComponents))
+            if (_entityCache.TryGetValue(type, out var cachedComponents))
             {
                 return cachedComponents;
             }
@@ -34,7 +34,7 @@ namespace ModusOperandi.ECS.EntityBuilding
                 .GetFiles($"{Directories.EntitiesDirectory}",
                     $"{type}.yaml", SearchOption.AllDirectories)
                 .First()).Values.ToList()[0];
-            EntityCache[type] = components;
+            _entityCache[type] = components;
             return components;
         }
     }

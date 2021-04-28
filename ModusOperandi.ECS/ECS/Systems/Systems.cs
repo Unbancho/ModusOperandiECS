@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
@@ -35,60 +34,41 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class EntitySystem<T> : UniqueSystem, IEntitySystem<T> where T : IArchetype, new()
+    public abstract class EntitySystem : UniqueSystem, IEntitySystem
     {
         public Archetype[] Archetypes { get; protected set; }
     }
 
     [PublicAPI]
-    public abstract class UpdateEntitySystem<T> : EntitySystem<T>, IUpdateSystem where T : IArchetype, new()
+    public abstract class UpdateEntitySystem<T> : EntitySystem, IUpdateSystem where T : IArchetype, new()
     {
         protected UpdateEntitySystem()
         {
             var arch = new T();
             Archetypes = new[] {new Archetype(arch.Signature, arch.AntiSignature, arch.Indices, arch.AntiIndices)};
         }
-        
-        public abstract void ActOnEntity(Entity entity, float deltaTime);
+
+        public virtual void PreExecution()
+        {
+            
+        }
 
         public virtual void Execute(float deltaTime)
         {
             foreach (var archetype in Archetypes)
             {
                 var entities = Ecs.Query(archetype, Scene);
-                if (Parallel)
-                    ActOnEntitiesParallel(deltaTime, entities);
-                else
-                    ActOnEntities(deltaTime, entities);
+                // ReSharper disable once ForCanBeConvertedToForeach
+                for (var i = 0; i < entities.Length; i++)
+                    ActOnEntity(entities[i], deltaTime);
             }
-        }
-
-        public void ActOnEntities(float deltaTime, Span<Entity> entities)
-        {
-            for (var i = 0; i < entities.Length; i++)
-                ActOnEntity(entities[i], deltaTime);
         }
         
-        // TODO: Find out why it's so much slower, maybe make it not so.
-        private void ActOnEntitiesParallel(float deltaTime, Span<Entity> entitiesSpan)
-        {
-            var entities = entitiesSpan.ToArray();
-            
-            var degreeOfParallelism = Environment.ProcessorCount;
-            var tasks = new Task[degreeOfParallelism];
-            for (var taskNumber = 0; taskNumber < degreeOfParallelism; taskNumber++)
-            {
-                var taskNumberCopy = taskNumber;
-                tasks[taskNumber] = Task.Factory.StartNew(
-                    () =>
-                    {
-                        var max = entities.Length * (taskNumberCopy + 1) / degreeOfParallelism;
-                        for (var i = entities.Length * taskNumberCopy / degreeOfParallelism; i < max; i++)
-                            ActOnEntity(entities[i].ID, deltaTime);
-                    });
-            }
+        public abstract void ActOnEntity(Entity entity, float deltaTime);
 
-            Task.WaitAll(tasks);
+        public virtual void PostExecution()
+        {
+            
         }
     }
 
@@ -102,7 +82,7 @@ namespace ModusOperandi.ECS.Systems
     {
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
         protected uint NumberOfComponents => ComponentManager.AssignedComponents;
-        public Span<T> Components => ((Span<T>)ComponentManager.ManagedComponents).Slice(1, (int)NumberOfComponents);
+        public virtual Span<T> Components => ComponentManager.Components.ComponentArray;
     }
     
     [PublicAPI]
@@ -113,6 +93,11 @@ namespace ModusOperandi.ECS.Systems
         struct
 #endif
     {
+        public virtual void PreExecution()
+        {
+            
+        }
+
         public virtual void Execute(float deltaTime)
         {
             var components = Components;
@@ -120,10 +105,12 @@ namespace ModusOperandi.ECS.Systems
                 ActOnComponent(ref components[i], deltaTime);
         }
 
-        public virtual void ActOnComponent(ref T component, float deltaTime)
+        public virtual void PostExecution()
         {
-            throw new NotImplementedException();
+            
         }
+
+        public abstract void ActOnComponent(ref T component, float deltaTime);
     }
 
     [PublicAPI]
@@ -137,11 +124,12 @@ namespace ModusOperandi.ECS.Systems
         public virtual void Draw(SpriteBatch spriteBatch)
         {
             var components = Components;
+            // ReSharper disable once ForCanBeConvertedToForeach
             for (var i = 0; i < components.Length; i++)
-                DrawComponent(ref components[i], spriteBatch);
+                DrawComponent(components[i], spriteBatch);
         }
 
-        public abstract void DrawComponent(ref T component, SpriteBatch spriteBatch);
+        public abstract void DrawComponent(T component, SpriteBatch spriteBatch);
     }
 
     [PublicAPI]

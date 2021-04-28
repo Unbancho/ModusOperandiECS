@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Security;
 using JetBrains.Annotations;
@@ -40,6 +41,7 @@ namespace ModusOperandi.Rendering
             Count = 0;
             _textures.Clear();
             _activeTexture = IntPtr.Zero;
+            _texts.Clear();
         }
 
         public void End()
@@ -79,12 +81,12 @@ namespace ModusOperandi.Rendering
 
         public void Draw(Sprite sprite)
         {
-            Draw(sprite.Texture?.CPointer ?? IntPtr.Zero, sprite.Position, sprite.TextureRect, sprite.Color, sprite.Scale, sprite.Origin,
+            Draw(sprite.Texture?.CPointer ?? IntPtr.Zero, new(sprite.Position.X, sprite.Position.Y), sprite.TextureRect, sprite.Color, new(sprite.Scale.X, sprite.Scale.Y), new(sprite.Origin.X, sprite.Origin.Y),
                  sprite.Rotation);
         }
-        
-        public unsafe void Draw(IntPtr texture, Vector2f position, IntRect rec, Color color, Vector2f scale,
-                                Vector2f origin, float rotation = 0)
+
+        public unsafe void Draw(IntPtr texture, Vector2 position, IntRect rec, Color color, Vector2 scale,
+                                Vector2 origin, float rotation = 0)
         {
 
             var index = Create(texture);
@@ -102,9 +104,9 @@ namespace ModusOperandi.Rendering
             scale.X *= rec.Width;
             scale.Y *= rec.Height;
 
-            fixed (Vertex* fptr = _vertices)
+            fixed (Vertex* fixedPtr = _vertices)
             {
-                var ptr = fptr + index;
+                var ptr = fixedPtr + index;
 
                 ptr->Position.X = pX * cos - pY * sin + position.X;
                 ptr->Position.Y = pX * sin + pY * cos + position.Y;
@@ -137,11 +139,17 @@ namespace ModusOperandi.Rendering
                 ptr->Color = color;
             }
         }
-        
+
+        public void Draw(Text text)
+        {
+            _texts.Add(text);
+        }
+
+        private List<Text> _texts = new();
         public void Draw(RenderTarget target, RenderStates states)
         {
             var windowPtr = ((ObjectBase) target).CPointer;
-            var marshaledStates = new MarshalData()
+            var marshaledStates = new MarshalData
             {
                 blendMode = states.BlendMode,
                 shader = states.Shader?.CPointer ?? IntPtr.Zero,
@@ -161,10 +169,15 @@ namespace ModusOperandi.Rendering
                 
                 index += item.Count;
             }
+
+            foreach (var text in _texts)
+            {
+                text.Draw(target, states);
+            }
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct MarshalData
+        internal ref struct MarshalData
         {
             public BlendMode blendMode;
             public Transform transform;
@@ -173,15 +186,15 @@ namespace ModusOperandi.Rendering
         }
         
         [DllImport(CSFML.graphics, CallingConvention = CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
-        static extern unsafe void sfRenderWindow_drawPrimitives(IntPtr CPointer, Vertex* vertexPtr, uint vertexCount, PrimitiveType type, ref MarshalData renderStates);
+        private static extern unsafe void sfRenderWindow_drawPrimitives(IntPtr cPointer, Vertex* vertexPtr, uint vertexCount, PrimitiveType type, ref MarshalData renderStates);
         
         public unsafe void Draw(IntPtr texture, FloatRect rec, IntRect src, Color color)
         {
             var index = Create(texture);
 
-            fixed (Vertex* fptr = _vertices)
+            fixed (Vertex* fixedPtr = _vertices)
             {
-                var ptr = fptr + index;
+                var ptr = fixedPtr + index;
 
                 ptr->Position.X = rec.Left;
                 ptr->Position.Y = rec.Top;
@@ -220,10 +233,10 @@ namespace ModusOperandi.Rendering
                 width = (int)texture.Size.X;
                 height = (int)texture.Size.Y;
             }
-            Draw(texture.CPointer, rec, new(0, 0, width, height), color);
+            Draw(texture!.CPointer, rec, new(0, 0, width, height), color);
         }
 
-        public void Draw(Texture texture, Vector2f pos, Color color)
+        public void Draw(Texture texture, Vector2 pos, Color color)
         {
             var width = (int)texture.Size.X;
             var height = (int)texture.Size.Y;

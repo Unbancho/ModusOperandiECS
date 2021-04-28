@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
 using JetBrains.Annotations;
-using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Entities;
 using ModusOperandi.ECS.EntityBuilding;
 using ModusOperandi.ECS.Systems;
@@ -42,10 +41,16 @@ namespace ModusOperandi.ECS.Scenes
 
         public virtual void Update(float deltaTime)
         {
-            foreach (var system in GetSystems<UpdateSystemAttribute>()) (system as IUpdateSystem)?.Execute(deltaTime);
+            // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
+            foreach (var system in GetSystems<UpdateSystemAttribute>())
+            {
+                var updateSystem = (IUpdateSystem) system;
+                updateSystem.PreExecution();
+                updateSystem.Execute(deltaTime);
+                updateSystem.PostExecution();
+            }
         }
 
-        // TODO: Auto-sort based on dependencies.
         public T StartSystem<T>() where T : ISystem, new()
         {
             var system = new T();
@@ -60,7 +65,7 @@ namespace ModusOperandi.ECS.Scenes
         public bool AddSystem<T>(T system) where T : ISystem
         {
             system.Scene = this;
-            return GetSystems((dynamic) GetSystemGroupAttribute<T>()).Add(system);
+            return GetSystems((dynamic)GetSystemGroupAttribute<T>()).Add(system);
         }
 
         public bool StopSystem<T>() where T : ISystem, new()
@@ -70,10 +75,10 @@ namespace ModusOperandi.ECS.Scenes
         
         public bool StopSystem<T>(T dummy) where T : ISystem
         {
-            return GetSystems((dynamic) GetSystemGroupAttribute<T>()).Remove(dummy);
+            return GetSystems((dynamic)GetSystemGroupAttribute<T>()).Remove(dummy);
         }
 
-        private SystemGroupAttribute GetSystemGroupAttribute<T>() where T : ISystem
+        private static SystemGroupAttribute GetSystemGroupAttribute<T>() where T : ISystem
         {
             return typeof(T).GetCustomAttribute<SystemGroupAttribute>() ?? new UpdateSystemAttribute();
         }
@@ -94,7 +99,7 @@ namespace ModusOperandi.ECS.Scenes
             return GetSystems<T>();
         }
         
-        private static SystemsManager _systems = new();
+        private static TypeKeyedCollection<HashSet<ISystem>> _systems = new();
         
         private static class PerEventType<T> where T: IEntityEvent
         {
@@ -122,22 +127,10 @@ namespace ModusOperandi.ECS.Scenes
             PerType<TK>.Element = element;
         }
 
+        // ReSharper disable once UnusedTypeParameter
         private static class PerType<TK>
         {
             public static T Element;
-        }
-    }
-
-    public class SystemsManager : TypeKeyedCollection<HashSet<ISystem>>
-    {
-        public new HashSet<ISystem> Get<TK>() where TK : SystemGroupAttribute
-        {
-            return base.Get<TK>();
-        }
-
-        public new void Put<TK>(HashSet<ISystem> element) where TK : SystemGroupAttribute
-        {
-            base.Put<TK>(element);
         }
     }
 }

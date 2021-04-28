@@ -23,12 +23,6 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     }
 
     [PublicAPI]
-    public interface IEntitySystem<T> : IEntitySystem where T: IArchetype, new()
-    {
-           
-    }
-
-    [PublicAPI]
     public interface IComponentSystem<T> : ISystem where T : struct
     {
         Span<T> Components { get; }
@@ -37,7 +31,9 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     [PublicAPI]
     public interface IUpdateSystem : ISystem
     {
+        void PreExecution();
         void Execute(float deltaTime);
+        void PostExecution();
     }
 
     [PublicAPI]
