@@ -51,6 +51,17 @@ namespace ModusOperandi.ECS.Scenes
             }
         }
 
+        public interface IGameStateStruct
+        {
+        }
+        public virtual void RunSystems<T>() where T : SystemGroupAttribute
+        {
+            foreach (var system in GetSystems<T>())
+            {
+                
+            }
+        }
+
         public T StartSystem<T>() where T : ISystem, new()
         {
             var system = new T();
