@@ -13,7 +13,7 @@ namespace ModusOperandi.ECS
     public static class Ecs
     {
         public const ulong MaxEntities = 1_000_000;
-        private static readonly ulong[] EntityArchetypes = new ulong[MaxEntities];
+        private static ulong[] _entityArchetypes = Array.Empty<ulong>();
 
         public static void RegisterComponent<T>(Entity e, T component) where T :
 #if UNMANAGED
@@ -24,7 +24,9 @@ namespace ModusOperandi.ECS
         {
             GetComponentManager<T>().AddComponent(component, e);
             var sig = IComponentManager<T>.Signature;
-            EntityArchetypes[e.Index] |= sig;
+            if(_entityArchetypes.Length <= e.Index)
+                Array.Resize(ref _entityArchetypes, _entityArchetypes.Length*2+2);
+            _entityArchetypes[e.Index] |= sig;
             foreach (var archetype in _dirtyDict.Keys)
             {
                 if ((archetype.Signature & sig) != 0 && (archetype.AntiSignature & sig) == 0)
@@ -37,7 +39,7 @@ namespace ModusOperandi.ECS
             RegisterComponent(e, (dynamic) component);
         }
 
-        public static ulong GetEntityArchetype(Entity e) => EntityArchetypes[e];
+        public static ulong GetEntityArchetype(Entity e) => _entityArchetypes[e];
         
 
         public static ComponentManager<T> GetComponentManager<T>() where T :
@@ -134,7 +136,7 @@ namespace ModusOperandi.ECS
         [SuppressMessage("ReSharper", "LoopCanBeConvertedToQuery")]
         public static bool EntityMatches(uint entity, Span<int> indices, Span<int> antiIndices)
         {
-            var entityArchetype = EntityArchetypes[entity];
+            var entityArchetype = _entityArchetypes[entity];
             for (var i = 0; i < indices.Length; i++)
             {
                 if ((entityArchetype & 1u << indices[i]) == 0) return false;

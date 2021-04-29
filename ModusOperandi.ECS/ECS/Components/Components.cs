@@ -3,6 +3,7 @@ using JetBrains.Annotations;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.InteropServices;
 using ModusOperandi.ECS.Entities;
 
 
@@ -17,29 +18,44 @@ namespace ModusOperandi.ECS.Components
     public enum ComponentStorageOptions
     {
         Fast,
-        Light
+        Light,
     }
 
-    public class EntityMapFast : IEntityMap
+    public struct EntityMapFast : IEntityMap
     {
-        private readonly uint[] _map = new uint[Ecs.MaxEntities];
+        private uint[] _map;
         public uint this[Entity entity]
         {
             get => _map[entity];
-            set => _map[entity] = value;
+            set
+            {
+                if(entity >= _map.Length)
+                    Array.Resize(ref _map, (int)entity.ID+1);
+                _map[entity] = value;
+            }
+        }
+
+        public EntityMapFast(int capacity = 0)
+        {
+            _map = new uint[capacity];
         }
     }
 
-    public class EntityMapLight : IEntityMap
+    public readonly struct EntityMapLight : IEntityMap
     {
-        private readonly Dictionary<Entity, uint> _map = new();
+        private readonly Dictionary<Entity, uint> _map;
         public uint this[Entity entity]
         {
             get => _map.TryGetValue(entity, out var idx) ? idx : 0;
             set => _map[entity] = value;
         }
-    }
 
+        public EntityMapLight(int i = 0)
+        {
+            _map = new();
+        }
+    }
+    
     [PublicAPI]
     public interface IComponentManager
     {
@@ -64,10 +80,11 @@ namespace ModusOperandi.ECS.Components
         static ulong Signature => 1u << Index;
         void AddComponent(T component, Entity entity);
         ref T GetComponent(Entity entity);
-        public new Components<T> Components { get; }
+        public new Components<T> Components { get; } 
     }
-    
-    
+
+
+    [PublicAPI]
     public readonly ref struct Components<T> where T :
 #if UNMANAGED
         unmanaged
@@ -75,68 +92,66 @@ namespace ModusOperandi.ECS.Components
         struct
 #endif
     {
-        public readonly Span<T> ComponentArray;
+        public Span<T> ComponentArray => _componentArray.Slice(1, _componentArray.Length - 1);
+        private readonly Span<T> _componentArray;
         private readonly IEntityMap _map;
             
-        public Components(Span<T> arr, IEntityMap map, int nComponents)
+        public Components(Span<T> arr, IEntityMap map)
         {
             _map = map;
-            ComponentArray = arr.Slice(1, nComponents);
+            _componentArray = arr;
         }
 
-        public ref T Get(Entity e) => ref ComponentArray[(int)_map[e]];
+        public ref T Get(Entity e) => ref _componentArray[(int)_map[e]];
     }
     
-    
-    [PublicAPI]
-    [SuppressMessage("ReSharper", "StaticMemberInGenericType")]
-    public class ComponentManager<T> : IComponentManager<T> where T :
-#if UNMANAGED
-        unmanaged
-#else
-        struct
-#endif
+    public unsafe class ComponentManager<T> : IComponentManager<T> where T : unmanaged
     {
-        private IEntityMap _map;
-        private readonly List<Entity> _reverseMap = new() {0};
+        private readonly T* _components;
 
-        public ref T GetComponent(Entity entity) => ref _managedComponents[LookUp(entity)];
-        public Components<T> Components => new (_managedComponents, _map, (int)AssignedComponents);
-        private T[] _managedComponents;
-        object[] IComponentManager.Components => _managedComponents.Cast<object>().ToArray();
+        public uint LookUp(Entity entity)
+        {
+            return _map[entity];
+        }
+
+        public Entity ReverseLookUp(uint index)
+        {
+            return _reverseMap[(int)index];
+        }
+
+        public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
         public uint AssignedComponents { get; private set; }
-
         public void AddComponent(T component, Entity entity)
         {
             AssignedComponents++;
             _map[entity] = AssignedComponents;
             _reverseMap.Add(entity);
-            if (_map[entity] >= _managedComponents.Length)
-            {
-                var managedComponents = _managedComponents;
-                Array.Resize(ref managedComponents, _managedComponents.Length*2);
-                _managedComponents = managedComponents;
-            }
-            _managedComponents[_map[entity]] = component;
+            _components[_map[entity]] = component;
         }
 
-        public uint LookUp(Entity entity) => _map[entity];
-
-        public Entity ReverseLookUp(uint index) => _reverseMap[(int)index];
-
-        public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
-
-        public ComponentManager(ComponentStorageOptions options = ComponentStorageOptions.Fast)
+        public ref T GetComponent(Entity entity)
         {
-            _managedComponents = new T[1];
-            _map = options switch
-            {
-                ComponentStorageOptions.Fast => new EntityMapFast(),
-                ComponentStorageOptions.Light => new EntityMapLight(),
-                _ => throw new ArgumentOutOfRangeException(nameof(options), options, null)
-            };
+            return ref _components[_map[entity]];
         }
 
+        private EntityMapFast _map;
+        private readonly List<Entity> _reverseMap;
+
+        public Components<T> Components
+            => new (new (_components, (int)AssignedComponents), _map);
+        
+
+        object[] IComponentManager.Components => Array.Empty<object>();
+
+        private const int Max = 10_000;
+        public ComponentManager(int max=Max)
+        {
+            _components = (T*) Marshal.AllocHGlobal(sizeof(T) * max).ToPointer();
+            AssignedComponents = 0;
+            _map = new(1);
+            _reverseMap = new() {0};
+        }
+        
         static ComponentManager()
         {
             IComponentManager<T>.Index = IComponentManager.Counter++;
