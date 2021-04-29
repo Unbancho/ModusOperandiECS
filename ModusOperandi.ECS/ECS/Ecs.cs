@@ -23,8 +23,13 @@ namespace ModusOperandi.ECS
 #endif
         {
             GetComponentManager<T>().AddComponent(component, e);
-            EntityArchetypes[e.Index] |= IComponentManager<T>.Signature;
-            _dirty = true;
+            var sig = IComponentManager<T>.Signature;
+            EntityArchetypes[e.Index] |= sig;
+            foreach (var archetype in _dirtyDict.Keys)
+            {
+                if ((archetype.Signature & sig) != 0 && (archetype.AntiSignature & sig) == 0)
+                    _dirtyDict[archetype] = true;
+            }
         }
 
         public static void RegisterComponent(Entity e, object component)
@@ -101,12 +106,13 @@ namespace ModusOperandi.ECS
             return Query(archetype, smallestGroup);
         }
 
-        //TODO: Make dirty only when necessary and make not dirty work.
         private static Dictionary<Archetype, Entity[]> _queryCache = new();
-        private static bool _dirty;
+        private static Dictionary<Archetype, bool> _dirtyDict = new();
         public static Span<Entity> Query(Archetype archetype, Entity[] entitiesToQuery)
         {
-            if (!_dirty && _queryCache.TryGetValue(archetype, out var cachedEntities))
+            if (!_dirtyDict.TryGetValue(archetype, out var dirty))
+                (dirty, _dirtyDict[archetype]) = (true, true);
+            if (!dirty && _queryCache.TryGetValue(archetype, out var cachedEntities))
                 return cachedEntities;
             Span<Entity> entities = new Entity[entitiesToQuery.Length];
             var filteredEntities = 0;
@@ -120,6 +126,7 @@ namespace ModusOperandi.ECS
 
             var r = entities.Slice(0, filteredEntities);
             _queryCache[archetype] = r.ToArray();
+            _dirtyDict[archetype] = false;
             return r;
         }
 
