@@ -2,7 +2,6 @@ using System;
 using JetBrains.Annotations;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.InteropServices;
 using ModusOperandi.ECS.Entities;
 
@@ -63,7 +62,7 @@ namespace ModusOperandi.ECS.Components
         uint LookUp(Entity entity);
         Entity ReverseLookUp(uint index);
         public Entity[] EntitiesWithComponent { get; }
-        public uint AssignedComponents { get;}
+        public int AssignedComponents { get;}
         public object[] Components { get; }
     }
     
@@ -107,7 +106,7 @@ namespace ModusOperandi.ECS.Components
     
     public unsafe class ComponentManager<T> : IComponentManager<T> where T : unmanaged
     {
-        private readonly T* _components;
+        private T* _components;
 
         public uint LookUp(Entity entity)
         {
@@ -120,11 +119,26 @@ namespace ModusOperandi.ECS.Components
         }
 
         public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
-        public uint AssignedComponents { get; private set; }
+
+        private readonly int _size;
+        private int _capacity;
+        public int Capacity
+        {
+            get => _capacity;
+            set
+            {
+                _components = (T*) Marshal.ReAllocHGlobal(new (_components), new ((value+1)*_size));
+                _capacity = value;
+            }
+        }
+
+        public int AssignedComponents { get; private set; }
         public void AddComponent(T component, Entity entity)
         {
+            if (AssignedComponents == Capacity)
+                Capacity += 10;
             AssignedComponents++;
-            _map[entity] = AssignedComponents;
+            _map[entity] = (uint) AssignedComponents;
             _reverseMap.Add(entity);
             _components[_map[entity]] = component;
         }
@@ -138,15 +152,16 @@ namespace ModusOperandi.ECS.Components
         private readonly List<Entity> _reverseMap;
 
         public Components<T> Components
-            => new (new (_components, (int)AssignedComponents), _map);
+            => new (new (_components, AssignedComponents), _map);
         
 
         object[] IComponentManager.Components => Array.Empty<object>();
 
-        private const int Max = 10_000;
-        public ComponentManager(int max=Max)
+        public ComponentManager(int capacity=50)
         {
-            _components = (T*) Marshal.AllocHGlobal(sizeof(T) * max).ToPointer();
+            _size = sizeof(T);
+            _capacity = capacity;
+            _components = (T*) Marshal.AllocHGlobal(_size * capacity).ToPointer();
             AssignedComponents = 0;
             _map = new(1);
             _reverseMap = new() {0};

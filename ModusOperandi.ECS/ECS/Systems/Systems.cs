@@ -81,7 +81,7 @@ namespace ModusOperandi.ECS.Systems
 #endif
     {
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
-        protected uint NumberOfComponents => ComponentManager.AssignedComponents;
+        protected int NumberOfComponents => ComponentManager.AssignedComponents;
         public virtual Span<T> Components => ComponentManager.Components.ComponentArray;
     }
     

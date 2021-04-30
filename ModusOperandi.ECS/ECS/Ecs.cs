@@ -85,7 +85,7 @@ namespace ModusOperandi.ECS
             static Entity[] SmallestGroup(Archetype a, Scene s = null)
             {
                 var indices = a.Indices;
-                var min = uint.MaxValue;
+                var min = int.MaxValue;
                 var idx = indices.Length - 1;
                 for (var i = 0; i < indices.Length; i++)
                 {
