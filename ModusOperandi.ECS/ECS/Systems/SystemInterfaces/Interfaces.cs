@@ -17,6 +17,12 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     }
 
     [PublicAPI]
+    public interface ISystem<in T> : ISystem where T : Scene.IGameStateStruct
+    {
+        void Run(T gameState);
+    }
+
+    [PublicAPI]
     public interface IEntitySystem : ISystem
     {
         Archetype[] Archetypes { get; }

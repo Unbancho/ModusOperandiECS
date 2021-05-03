@@ -38,6 +38,11 @@ namespace ModusOperandi.ECS.Components
         {
             _map = new uint[capacity];
         }
+
+        public void Pop()
+        {
+            Array.Resize(ref _map, _map.Length-1);
+        }
     }
 
     public readonly struct EntityMapLight : IEntityMap
@@ -58,6 +63,9 @@ namespace ModusOperandi.ECS.Components
     [PublicAPI]
     public interface IComponentManager
     {
+        public static Type[] ComponentSignatures { get; } = new Type[64];
+        public static IComponentManager[] ComponentManagers { get; } = new IComponentManager[64];
+        
         internal static int Counter { get; set; }
         uint LookUp(Entity entity);
         Entity ReverseLookUp(uint index);
@@ -100,11 +108,91 @@ namespace ModusOperandi.ECS.Components
             _map = map;
             _componentArray = arr;
         }
+        
+        public Components(T[] arr, IEntityMap map, int nComponents)
+        {
+            _map = map;
+            _componentArray = arr;
+            _componentArray = _componentArray.Slice(0, nComponents + 1);
+        }
 
         public ref T Get(Entity e) => ref _componentArray[(int)_map[e]];
     }
     
-    public unsafe class ComponentManager<T> : IComponentManager<T> where T : unmanaged
+    public class ComponentManager<T> : IComponentManager<T> where T : unmanaged
+    {
+        private T[] _components;
+        public uint LookUp(Entity entity) => _map[entity];
+        public Entity ReverseLookUp(uint index) => _reverseMap[(int)index];
+        public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
+
+        public int AssignedComponents { get; private set; }
+        public void AddComponent(T component, Entity entity)
+        {
+            AssignedComponents++;
+            if (entity.ID >= _components.Length)
+            {
+                Array.Resize(ref _components, _components.Length+50);
+            }
+            _map[entity] = (uint) AssignedComponents;
+            _reverseMap.Add(entity);
+            _components[_map[entity]] = component;
+        }
+
+        public void RemoveComponent(Entity entity)
+        {
+            Swap((int)_map[entity], AssignedComponents);
+            AssignedComponents--;
+            _reverseMap.RemoveAt(_reverseMap.Count-1);
+            _map.Pop();
+        }
+
+        public void Swap(Entity left, Entity right)
+        {
+            (_components[_map[left]], _components[_map[right]]) = (_components[_map[right]], _components[_map[left]]);
+            (_reverseMap[(int) _map[left]], _reverseMap[(int) _map[right]]) =
+                (_reverseMap[(int) _map[right]], _reverseMap[(int) _map[left]]);
+            (_map[left], _map[right]) = (_map[right], _map[left]);
+        }
+
+        public void Swap(int left, int right)
+        {
+            (_components[right], _components[left]) = (_components[left], _components[right]);
+            (_map[_reverseMap[left]], _map[_reverseMap[right]]) = (_map[_reverseMap[right]], _map[_reverseMap[left]]);
+            (_reverseMap[left], _reverseMap[right]) = (_reverseMap[right], _reverseMap[left]);
+        }
+
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetComponent(Entity entity)
+        {
+            return ref _components[_map[entity]];
+        }
+
+        private EntityMapFast _map;
+        private readonly List<Entity> _reverseMap;
+
+        public Components<T> Components => new (_components, _map, AssignedComponents);
+        
+
+        object[] IComponentManager.Components => Array.Empty<object>();
+
+        public ComponentManager(int capacity=50)
+        {
+            _components = new T[capacity];
+            AssignedComponents = 0;
+            _map = new(1);
+            _reverseMap = new() {0};
+        }
+        
+        static ComponentManager()
+        {
+            IComponentManager<T>.Index = IComponentManager.Counter++;
+            IComponentManager.ComponentSignatures[IComponentManager<T>.Index] = typeof(T);
+            IComponentManager.ComponentManagers[IComponentManager<T>.Index] = Ecs.GetComponentManager<T>();
+        }
+    }
+    
+    public unsafe class ComponentManagerUnsafe<T> : IComponentManager<T> where T : unmanaged
     {
         private T* _components;
 
@@ -127,7 +215,8 @@ namespace ModusOperandi.ECS.Components
             get => _capacity;
             set
             {
-                _components = (T*) Marshal.ReAllocHGlobal(new (_components), new ((value+1)*_size));
+                _components = (T*) Marshal.ReAllocHGlobal(new (_components), new ((value+1)*_size))
+                    .ToPointer();
                 _capacity = value;
             }
         }
@@ -135,8 +224,8 @@ namespace ModusOperandi.ECS.Components
         public int AssignedComponents { get; private set; }
         public void AddComponent(T component, Entity entity)
         {
-            if (AssignedComponents == Capacity)
-                Capacity += 10;
+            if (AssignedComponents >= Capacity)
+                Capacity += 50;
             AssignedComponents++;
             _map[entity] = (uint) AssignedComponents;
             _reverseMap.Add(entity);
@@ -152,12 +241,12 @@ namespace ModusOperandi.ECS.Components
         private readonly List<Entity> _reverseMap;
 
         public Components<T> Components
-            => new (new (_components, AssignedComponents), _map);
+            => new (new (_components, AssignedComponents+1), _map);
         
 
         object[] IComponentManager.Components => Array.Empty<object>();
 
-        public ComponentManager(int capacity=50)
+        public ComponentManagerUnsafe(int capacity=50)
         {
             _size = sizeof(T);
             _capacity = capacity;
@@ -167,7 +256,7 @@ namespace ModusOperandi.ECS.Components
             _reverseMap = new() {0};
         }
         
-        static ComponentManager()
+        static ComponentManagerUnsafe()
         {
             IComponentManager<T>.Index = IComponentManager.Counter++;
         }
@@ -218,48 +307,3 @@ namespace ModusOperandi.ECS.Components
         }
     }
 }
-
-
-
-/*
-private void Destroy(uint i)
-{
-    var last = NumberOfInstances - 1;
-    var entity = Entities[i];
-    var lastEntity = Entities[last];
-    Entities[i] = Entities[last];
-    ManagedComponents[i] = ManagedComponents[last];
-    _map[lastEntity] = i;
-    _map.Remove(entity);
-    NumberOfInstances--;
-}
-
-        [Obsolete]
-        private void QuickSort(Span<T> array, IComparer<T> helper)
-        {
-            int Partition(Span<T> arr)
-            {
-                ref var pivot = ref arr[^1];
-                var i = -1;
-                for (var j = 0; j < arr.Length-1; j++)
-                {
-                    if (helper.Compare(arr[j], pivot) > 0) continue;
-                    i++;
-                    SwapComponents(i+1, j+1);
-                }
-                SwapComponents(i+2, arr.Length);
-                return i+1;
-            }
-            
-            while (true)
-            {
-                if (array.Length <= 1) return;
-                var q = Partition(array);
-                array = array[..q++];
-                QuickSort(array, helper);
-                if (q >= array.Length - 1) continue;
-                array = array[q..];
-                QuickSort(array, helper);
-            }
-        }
-*/

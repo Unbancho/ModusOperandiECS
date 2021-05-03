@@ -13,8 +13,21 @@ namespace ModusOperandi.ECS
     public static class Ecs
     {
         public const ulong MaxEntities = 1_000_000;
+        public const int MaxComponents = sizeof(ulong);
         private static ulong[] _entityArchetypes = Array.Empty<ulong>();
 
+
+        //TODO: Implement.
+        public static Entity CopyEntity(Entity e, Scene scene)
+        {
+            var e2 = scene.EntityManager.CreateEntity();
+            for (var i = 0; i < MaxComponents; i++)
+            {
+            }
+
+            return e2;
+        }
+        
         public static void RegisterComponent<T>(Entity e, T component) where T :
 #if UNMANAGED
             unmanaged
@@ -34,6 +47,23 @@ namespace ModusOperandi.ECS
             }
         }
 
+        public static void UnregisterComponent<T>(Entity e) where T:
+#if UNMANAGED
+        unmanaged
+#else 
+            struct
+#endif
+        {
+            GetComponentManager<T>().RemoveComponent(e);
+            var sig = IComponentManager<T>.Signature;
+            _entityArchetypes[e.Index] &= ~sig;
+            foreach (var archetype in _dirtyDict.Keys)
+            {
+                if ((archetype.Signature & sig) != 0 && (archetype.AntiSignature & sig) == 0) 
+                    _dirtyDict[archetype] = true;
+            }
+        }
+
         public static void RegisterComponent(Entity e, object component)
         {
             RegisterComponent(e, (dynamic) component);
@@ -42,6 +72,7 @@ namespace ModusOperandi.ECS
         public static ulong GetEntityArchetype(Entity e) => _entityArchetypes[e];
         
 
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ComponentManager<T> GetComponentManager<T>() where T :
 #if UNMANAGED
             unmanaged

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 
@@ -31,7 +32,17 @@ namespace ModusOperandi.ECS.Entities
     {
         public static bool IsNullEntity(this Entity entity) => entity == 0;
 
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T Get<T>(this Entity entity) where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
+            => ref Ecs.GetComponentManager<T>().GetComponent(entity);
+        
+        
+        public static ref T Get<T>(this Entity entity, T _) where T :
 #if UNMANAGED
             unmanaged
 #else 

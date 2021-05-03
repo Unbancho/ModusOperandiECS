@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
 using ModusOperandi.ECS.Components;
@@ -21,7 +22,7 @@ namespace ModusOperandi.ECS.Systems
         public Scene Scene { get; set; }
         public List<ISystem> ComplementarySystems { get; } = new();
         public bool Parallel { get; set; }
-
+        
         public override int GetHashCode()
         {
             return GetType().GetHashCode();
@@ -37,21 +38,72 @@ namespace ModusOperandi.ECS.Systems
     public abstract class EntitySystem : UniqueSystem, IEntitySystem
     {
         public Archetype[] Archetypes { get; protected set; }
+        
+        [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+        public class IncludeAttribute : Attribute
+        {
+            public ulong Signature { get; private set; }
+            public IncludeAttribute(Type componentType)
+            {
+                LoadSignature((dynamic)Activator.CreateInstance(componentType));
+            }
+
+            private void LoadSignature<T>(T _) where T:
+#if UNMANAGED
+                unmanaged
+#else
+            struct
+#endif
+            {
+                Signature = IComponentManager<T>.Signature;
+            }
+        }
+        
+        [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+        public class ExcludeAttribute : Attribute
+        {
+            public ulong Signature { get; private set; }
+            public ExcludeAttribute(Type componentType)
+            {
+                LoadSignature((dynamic)Activator.CreateInstance(componentType));
+            }
+
+            private void LoadSignature<T>(T _) where T:
+#if UNMANAGED
+                unmanaged
+#else
+            struct
+#endif
+            {
+                Signature = IComponentManager<T>.Signature;
+            }
+        }
+
+        protected EntitySystem()
+        {
+            var sig = 0ul;
+            var includes = GetType().GetCustomAttributes(typeof(IncludeAttribute), false)
+                .Cast<IncludeAttribute>();
+            foreach (var include in includes)
+            {
+                sig |= include.Signature;
+            }
+            var excludes = GetType().GetCustomAttributes(typeof(ExcludeAttribute), false)
+                .Cast<ExcludeAttribute>();
+            var antiSig = 0ul;
+            foreach (var exclude in excludes)
+            {
+                antiSig |= exclude.Signature;
+            }
+
+            Archetypes = new[] { new Archetype(sig, antiSig)};
+        }
     }
 
     [PublicAPI]
-    public abstract class UpdateEntitySystem<T> : EntitySystem, IUpdateSystem where T : IArchetype, new()
+    public abstract class UpdateEntitySystem: EntitySystem, IUpdateSystem
     {
-        protected UpdateEntitySystem()
-        {
-            var arch = new T();
-            Archetypes = new[] {new Archetype(arch.Signature, arch.AntiSignature, arch.Indices, arch.AntiIndices)};
-        }
-
-        public virtual void PreExecution()
-        {
-            
-        }
+        public virtual void PreExecution() {}
 
         public virtual void Execute(float deltaTime)
         {
@@ -66,10 +118,7 @@ namespace ModusOperandi.ECS.Systems
         
         public abstract void ActOnEntity(Entity entity, float deltaTime);
 
-        public virtual void PostExecution()
-        {
-            
-        }
+        public virtual void PostExecution() {}
     }
 
     [PublicAPI]
@@ -133,7 +182,7 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class EventListenerSystem<T> : UniqueSystem, IEntitySystem, IListenSystem<T> where T : IEntityEvent
+    public abstract class EventListenerSystem<T> : EntitySystem, IListenSystem<T> where T : IEntityEvent
     {
         public ConcurrentStack<T> Events { get; } = new();
 
@@ -141,14 +190,13 @@ namespace ModusOperandi.ECS.Systems
         {
             Scene.RegisterListener(this);
         }
-
-        public Archetype[] Archetypes { get; protected set; }
-
-        public virtual bool ValidEvent(ref T e)
+        
+        public virtual bool ValidEvent(in T e)
         {
-            foreach (var archetype in Archetypes)
+            for (var index = 0; index < Archetypes.Length; index++)
             {
-                if((Ecs.GetEntityArchetype(e.Sender) & archetype.Signature) == archetype.Signature) return true;
+                var archetype = Archetypes[index];
+                if ((Ecs.GetEntityArchetype(e.Sender) & archetype.Signature) == archetype.Signature) return true;
             }
 
             return false;
@@ -160,15 +208,18 @@ namespace ModusOperandi.ECS.Systems
     {
         public virtual void Emit(T e)
         {
-            foreach (var l in Scene.GetListeners<T>())
+            var ls = Scene.GetListeners<T>();
+            for (var index = 0; index < ls.Count; index++)
             {
-                var els = (l as EventListenerSystem<T>)?.ValidEvent(ref e);
+                var l = ls[index];
+                var els = (l as EventListenerSystem<T>)?.ValidEvent(in e);
                 if (els != null)
                 {
-                    if(els.Value)
+                    if (els.Value)
                         l.Events.Push(e);
                     continue;
                 }
+
                 l.Events.Push(e);
             }
         }
