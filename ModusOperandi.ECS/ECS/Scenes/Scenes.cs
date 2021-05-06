@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Numerics;
 using System.Reflection;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
@@ -20,6 +21,8 @@ namespace ModusOperandi.ECS.Scenes
         }
 
         public string Name { get; }
+        public Vector2 Bounds { get; set; }
+
         public EntityManager EntityManager { get; set; } = new();
         public Entity[] Entities => EntityManager.CreatedEntities;
 

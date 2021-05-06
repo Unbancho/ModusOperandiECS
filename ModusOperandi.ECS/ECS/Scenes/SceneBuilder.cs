@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
@@ -42,6 +43,8 @@ namespace ModusOperandi.ECS.Scenes
                     _entityRegistry[(scene, entityName)] = new() {entity};
                 }
             }
+
+            scene!.Bounds = (Vector2) dict["bounds"];
 
             return scene;
         }

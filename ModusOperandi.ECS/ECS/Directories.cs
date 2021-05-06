@@ -9,5 +9,6 @@ namespace ModusOperandi.ECS
         public static string BaseDirectory => AppDomain.CurrentDomain.BaseDirectory;
         public static string ResourcesDirectory => $"{BaseDirectory}/Resources/";
         public static string EntitiesDirectory => $"{ResourcesDirectory}/Entities/";
+        public static string ScenesDirectory => $"{ResourcesDirectory}/Scenes/";
     }
 }

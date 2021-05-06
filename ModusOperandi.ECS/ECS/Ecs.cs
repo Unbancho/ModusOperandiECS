@@ -13,7 +13,7 @@ namespace ModusOperandi.ECS
     public static class Ecs
     {
         public const ulong MaxEntities = 1_000_000;
-        public const int MaxComponents = sizeof(ulong);
+        public const int MaxComponents = sizeof(ulong)*8;
         private static ulong[] _entityArchetypes = Array.Empty<ulong>();
 
 

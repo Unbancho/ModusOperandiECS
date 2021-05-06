@@ -63,8 +63,8 @@ namespace ModusOperandi.ECS.Components
     [PublicAPI]
     public interface IComponentManager
     {
-        public static Type[] ComponentSignatures { get; } = new Type[64];
-        public static IComponentManager[] ComponentManagers { get; } = new IComponentManager[64];
+        public static Type[] ComponentSignatures { get; } = new Type[Ecs.MaxComponents];
+        public static IComponentManager[] ComponentManagers { get; } = new IComponentManager[Ecs.MaxComponents];
         
         internal static int Counter { get; set; }
         uint LookUp(Entity entity);
@@ -188,7 +188,8 @@ namespace ModusOperandi.ECS.Components
         {
             IComponentManager<T>.Index = IComponentManager.Counter++;
             IComponentManager.ComponentSignatures[IComponentManager<T>.Index] = typeof(T);
-            IComponentManager.ComponentManagers[IComponentManager<T>.Index] = Ecs.GetComponentManager<T>();
+            //BUG: Nasty nasty.
+            //IComponentManager.ComponentManagers[IComponentManager<T>.Index] = Ecs.GetComponentManager<T>();
         }
     }
     
