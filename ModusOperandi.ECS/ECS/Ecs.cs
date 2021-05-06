@@ -36,7 +36,7 @@ namespace ModusOperandi.ECS
 #endif
         {
             GetComponentManager<T>().AddComponent(component, e);
-            var sig = IComponentManager<T>.Signature;
+            var sig = ComponentManagers<T>.Signature;
             if(_entityArchetypes.Length <= e.Index)
                 Array.Resize(ref _entityArchetypes, _entityArchetypes.Length*2+2);
             _entityArchetypes[e.Index] |= sig;
@@ -55,7 +55,7 @@ namespace ModusOperandi.ECS
 #endif
         {
             GetComponentManager<T>().RemoveComponent(e);
-            var sig = IComponentManager<T>.Signature;
+            var sig = ComponentManagers<T>.Signature;
             _entityArchetypes[e.Index] &= ~sig;
             foreach (var archetype in _dirtyDict.Keys)
             {
@@ -80,10 +80,10 @@ namespace ModusOperandi.ECS
             struct
 #endif
         {
-            var componentManager = PerType<T>.ComponentManager;
+            var componentManager = ComponentManagers<T>.ComponentManager;
             if (componentManager != null) return componentManager;
             SetComponentManager(new ComponentManager<T>());
-            return PerType<T>.ComponentManager;
+            return ComponentManagers<T>.ComponentManager;
         }
 
         public static void SetComponentManager<T>(ComponentManager<T> componentManager) where T :
@@ -93,13 +93,14 @@ namespace ModusOperandi.ECS
             struct
 #endif
         {
-            PerType<T>.ComponentManager = componentManager;
+            ComponentManagers<T>.ComponentManager = componentManager;
+            ComponentManagers<T>.Index = _componentManagerCount++;
             _componentManagers.Add(componentManager);
         }
 
         public static IComponentManager[] GetComponentManagers() => _componentManagers.ToArray();
 
-        private static class PerType<T> where T :
+        private static class ComponentManagers<T> where T :
 #if UNMANAGED
             unmanaged
 #else 
@@ -107,7 +108,27 @@ namespace ModusOperandi.ECS
 #endif
         {
             public static ComponentManager<T> ComponentManager;
+            public static int Index;
+            public static ulong Signature => 1u << Index;
         }
+
+        private static int _componentManagerCount;
+
+        public static int GetIndex<T>() where T :
+#if UNMANAGED
+            unmanaged
+#else 
+            struct
+#endif
+            => ComponentManagers<T>.Index;
+        
+        public static ulong GetSignature<T>() where T :
+#if UNMANAGED
+        unmanaged
+#else 
+            struct
+#endif
+            => ComponentManagers<T>.Signature;
         
         
         private static List<IComponentManager> _componentManagers = new();

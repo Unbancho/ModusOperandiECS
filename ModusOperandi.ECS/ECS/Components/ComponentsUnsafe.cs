@@ -18,30 +18,40 @@ namespace ModusOperandi.ECS.Components
         
         private static readonly void*[] ComponentArrays = new void*[Ecs.MaxComponents];
 
+        public static void AddComponent<T>(Entity e, T component) where  T: unmanaged
+        {
+            var array = (T*) ComponentArrays[Ecs.GetIndex<T>()];
+            var map = MapArrays[Ecs.GetIndex<T>()];
+            map.Map[e] = map.Count;
+            map.Count++;
+            array[map.Count] = component;
+            map.ReverseMap[map.Count] = e;
+        }
+        
         public static ref T Get<T>(int i) where  T: unmanaged
         {
-            return ref ((T*) ComponentArrays[IComponentManager<T>.Index])[i];
+            return ref ((T*) ComponentArrays[Ecs.GetIndex<T>()])[i];
         }
         
         public static ref T Get<T>(Entity e) where  T: unmanaged
         {
-            return ref ((T*) ComponentArrays[IComponentManager<T>.Index])[GetMapping<T>(e)];
+            return ref ((T*) ComponentArrays[Ecs.GetIndex<T>()])[GetMapping<T>(e)];
         }
 
         public static int GetMapping<T>(Entity e) where  T: unmanaged
         {
-            return MapArrays[IComponentManager<T>.Index].Map[(int)(uint) e];
+            return MapArrays[Ecs.GetIndex<T>()].Map[(int)(uint) e];
         }
         
         public static Entity GetReverseMapping<T>(int i) where  T: unmanaged
         {
-            return MapArrays[IComponentManager<T>.Index].ReverseMap[i];
+            return MapArrays[Ecs.GetIndex<T>()].ReverseMap[i];
         }
 
         public static Span<T> GetComponents<T>() where  T: unmanaged
         {
-            return new(ComponentArrays[IComponentManager<T>.Index], 
-                MapArrays[IComponentManager<T>.Index].Count);
+            return new(ComponentArrays[Ecs.GetIndex<T>()], 
+                MapArrays[Ecs.GetIndex<T>()].Count);
         }
 
         static ComponentsUnsafe()
@@ -57,12 +67,12 @@ namespace ModusOperandi.ECS.Components
     {
         public static ulong Signature<T>(this T c) where  T: unmanaged
         {
-            return IComponentManager<T>.Signature;
+            return Ecs.GetSignature<T>();
         }
         
         public static int Index<T>(this T c) where  T: unmanaged
         {
-            return IComponentManager<T>.Index;
+            return Ecs.GetIndex<T>();
         }
     }
 }

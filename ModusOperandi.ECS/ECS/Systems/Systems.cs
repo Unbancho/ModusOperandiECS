@@ -55,7 +55,7 @@ namespace ModusOperandi.ECS.Systems
             struct
 #endif
             {
-                Signature = IComponentManager<T>.Signature;
+                Signature = Ecs.GetSignature<T>();
             }
         }
         
@@ -75,7 +75,7 @@ namespace ModusOperandi.ECS.Systems
             struct
 #endif
             {
-                Signature = IComponentManager<T>.Signature;
+                Signature = Ecs.GetSignature<T>();
             }
         }
 

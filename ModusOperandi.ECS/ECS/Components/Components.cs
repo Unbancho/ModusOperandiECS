@@ -64,9 +64,6 @@ namespace ModusOperandi.ECS.Components
     public interface IComponentManager
     {
         public static Type[] ComponentSignatures { get; } = new Type[Ecs.MaxComponents];
-        public static IComponentManager[] ComponentManagers { get; } = new IComponentManager[Ecs.MaxComponents];
-        
-        internal static int Counter { get; set; }
         uint LookUp(Entity entity);
         Entity ReverseLookUp(uint index);
         public Entity[] EntitiesWithComponent { get; }
@@ -83,13 +80,10 @@ namespace ModusOperandi.ECS.Components
         struct
 #endif
     {
-        static int Index { get; protected set; }
-        static ulong Signature => 1u << Index;
         void AddComponent(T component, Entity entity);
         ref T GetComponent(Entity entity);
         public new Components<T> Components { get; } 
     }
-
 
     [PublicAPI]
     public readonly ref struct Components<T> where T :
@@ -183,84 +177,6 @@ namespace ModusOperandi.ECS.Components
             _map = new(1);
             _reverseMap = new() {0};
         }
-        
-        static ComponentManager()
-        {
-            IComponentManager<T>.Index = IComponentManager.Counter++;
-            IComponentManager.ComponentSignatures[IComponentManager<T>.Index] = typeof(T);
-            //BUG: Nasty nasty.
-            //IComponentManager.ComponentManagers[IComponentManager<T>.Index] = Ecs.GetComponentManager<T>();
-        }
-    }
-    
-    public unsafe class ComponentManagerUnsafe<T> : IComponentManager<T> where T : unmanaged
-    {
-        private T* _components;
-
-        public uint LookUp(Entity entity)
-        {
-            return _map[entity];
-        }
-
-        public Entity ReverseLookUp(uint index)
-        {
-            return _reverseMap[(int)index];
-        }
-
-        public Entity[] EntitiesWithComponent => _reverseMap.ToArray();
-
-        private readonly int _size;
-        private int _capacity;
-        public int Capacity
-        {
-            get => _capacity;
-            set
-            {
-                _components = (T*) Marshal.ReAllocHGlobal(new (_components), new ((value+1)*_size))
-                    .ToPointer();
-                _capacity = value;
-            }
-        }
-
-        public int AssignedComponents { get; private set; }
-        public void AddComponent(T component, Entity entity)
-        {
-            if (AssignedComponents >= Capacity)
-                Capacity += 50;
-            AssignedComponents++;
-            _map[entity] = (uint) AssignedComponents;
-            _reverseMap.Add(entity);
-            _components[_map[entity]] = component;
-        }
-
-        public ref T GetComponent(Entity entity)
-        {
-            return ref _components[_map[entity]];
-        }
-
-        private EntityMapFast _map;
-        private readonly List<Entity> _reverseMap;
-
-        public Components<T> Components
-            => new (new (_components, AssignedComponents+1), _map);
-        
-
-        object[] IComponentManager.Components => Array.Empty<object>();
-
-        public ComponentManagerUnsafe(int capacity=50)
-        {
-            _size = sizeof(T);
-            _capacity = capacity;
-            _components = (T*) Marshal.AllocHGlobal(_size * capacity).ToPointer();
-            AssignedComponents = 0;
-            _map = new(1);
-            _reverseMap = new() {0};
-        }
-        
-        static ComponentManagerUnsafe()
-        {
-            IComponentManager<T>.Index = IComponentManager.Counter++;
-        }
     }
 
     [AttributeUsage(AttributeTargets.Struct)]
@@ -271,26 +187,6 @@ namespace ModusOperandi.ECS.Components
     [PublicAPI]
     public static class ComponentExtensions
     {
-        public static ulong GetComponentSignature<T>(this T _) where T :
-#if UNMANAGED
-            unmanaged
-#else
-            struct
-#endif
-        {
-            return IComponentManager<T>.Signature;
-        }
-        
-        public static int GetComponentIndex<T>(this T _) where T :
-#if UNMANAGED
-            unmanaged
-#else
-            struct
-#endif
-        {
-            return IComponentManager<T>.Index;
-        }
-        
         public static T[] GetComponents<T>(this IComponentManager<T> manager, params Entity[] entities) where T :
 #if UNMANAGED
             unmanaged
