@@ -55,7 +55,12 @@ namespace ModusOperandi.ECS.Components
 
     public static class Extends
     {
-        public static int Signature<T>(this T c) where  T: unmanaged
+        public static ulong Signature<T>(this T c) where  T: unmanaged
+        {
+            return IComponentManager<T>.Signature;
+        }
+        
+        public static int Index<T>(this T c) where  T: unmanaged
         {
             return IComponentManager<T>.Index;
         }
