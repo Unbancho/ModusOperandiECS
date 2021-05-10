@@ -37,5 +37,13 @@ namespace ModusOperandi.ECS.EntityBuilding
             _entityCache[type] = components;
             return components;
         }
+
+        public static bool LoadChildren(string parent, out List<object> lists)
+        {
+            var dict = Yaml.Deserialize<object, List<object>>(Directory.GetFiles(
+                $"{Directories.EntitiesDirectory}",
+                $"{parent}.yaml", SearchOption.AllDirectories).First());
+            return dict.TryGetValue("children", out lists);
+        }
     }
 }

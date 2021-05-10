@@ -82,6 +82,7 @@ namespace ModusOperandi.ECS
         {
             var componentManager = ComponentManagers<T>.ComponentManager;
             if (componentManager != null) return componentManager;
+            ComponentManagers<T>.Index = _componentManagerCount++;
             SetComponentManager(new ComponentManager<T>());
             return ComponentManagers<T>.ComponentManager;
         }
@@ -94,7 +95,6 @@ namespace ModusOperandi.ECS
 #endif
         {
             ComponentManagers<T>.ComponentManager = componentManager;
-            ComponentManagers<T>.Index = _componentManagerCount++;
             _componentManagers.Add(componentManager);
         }
 

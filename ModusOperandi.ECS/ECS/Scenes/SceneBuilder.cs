@@ -9,6 +9,11 @@ using ModusOperandi.ECS.EntityBuilding;
 
 namespace ModusOperandi.ECS.Scenes
 {
+    public interface IParentComponent
+    {
+        public Entity Parent { get; set; }
+    }
+    
     // TODO: Systems in yaml.
     [PublicAPI]
     public class SceneBuilder
@@ -41,6 +46,16 @@ namespace ModusOperandi.ECS.Scenes
                 else
                 {
                     _entityRegistry[(scene, entityName)] = new() {entity};
+                }
+
+                if (!EntityBuilder.LoadChildren(entityName, out var componentLists)) continue;
+                foreach (var list in componentLists)
+                {
+                    var l = ((List<object>)((Dictionary<object, object>) list).Values.ToList()[0]);
+                    var pc = (IParentComponent) l.Find((obj) => obj.GetType().Name == "ParentComponent");
+                    if(pc != null)
+                        pc.Parent = entity;
+                    EntityBuilder.BuildEntity(l, scene);
                 }
             }
 
@@ -83,13 +98,13 @@ namespace ModusOperandi.ECS.Scenes
                     var isProperty = member as PropertyInfo != null;
                     if (isProperty)
                     {
-                        var hasSetMethod = member.GetSetMethod() != null;
+                        var hasSetMethod = member.GetSetMethod(true) != null;
                         var hasGetMethod = member.GetGetMethod() != null;
                         if(!hasGetMethod || !hasSetMethod) continue;
                     }
                     var defaultValue = member.GetValue(@default);
                     var updatedValue = member.GetValue(updated);
-                    if (updatedValue != defaultValue)
+                    if (updatedValue != defaultValue /*&& updatedValue != default(T)*/)
                     {
                         member.SetValue(@default, updatedValue);
                     }

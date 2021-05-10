@@ -177,12 +177,22 @@ namespace ModusOperandi.Rendering
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal ref struct MarshalData
+        public ref struct MarshalData
         {
             public BlendMode blendMode;
             public Transform transform;
             public IntPtr texture;
             public IntPtr shader;
+
+            public static MarshalData CreateFromRenderStates(RenderStates states)
+            {
+                return new()
+                {
+                    blendMode = states.BlendMode,
+                    shader = states.Shader?.CPointer ?? IntPtr.Zero,
+                    transform = states.Transform
+                };
+            }
         }
         
         [DllImport(CSFML.graphics, CallingConvention = CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
