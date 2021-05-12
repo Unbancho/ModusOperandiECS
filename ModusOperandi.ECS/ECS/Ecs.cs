@@ -132,7 +132,7 @@ namespace ModusOperandi.ECS
         
         
         private static List<IComponentManager> _componentManagers = new();
-        public static Span<Entity> Query(Archetype archetype, Scene scene=null)
+        public static Entity[] Query(Archetype archetype, Scene scene=null)
         {
             static Entity[] SmallestGroup(Archetype a, Scene s = null)
             {
@@ -162,7 +162,7 @@ namespace ModusOperandi.ECS
 
         private static Dictionary<Archetype, Entity[]> _queryCache = new();
         private static Dictionary<Archetype, bool> _dirtyDict = new();
-        public static Span<Entity> Query(Archetype archetype, Entity[] entitiesToQuery)
+        public static Entity[] Query(Archetype archetype, Entity[] entitiesToQuery)
         {
             if (!_dirtyDict.TryGetValue(archetype, out var dirty))
                 (dirty, _dirtyDict[archetype]) = (true, true);
@@ -181,7 +181,7 @@ namespace ModusOperandi.ECS
             var r = entities.Slice(0, filteredEntities);
             _queryCache[archetype] = r.ToArray();
             _dirtyDict[archetype] = false;
-            return r;
+            return _queryCache[archetype];
         }
 
         [SuppressMessage("ReSharper", "ForCanBeConvertedToForeach")]

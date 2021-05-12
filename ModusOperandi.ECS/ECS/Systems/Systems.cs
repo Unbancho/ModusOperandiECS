@@ -21,7 +21,7 @@ namespace ModusOperandi.ECS.Systems
     {
         public Scene Scene { get; set; }
         public List<ISystem> ComplementarySystems { get; } = new();
-        public bool Parallel { get; set; }
+        public bool Parallel { get; set; } = true;
         
         public override int GetHashCode()
         {
@@ -101,24 +101,36 @@ namespace ModusOperandi.ECS.Systems
     }
 
     [PublicAPI]
-    public abstract class UpdateEntitySystem: EntitySystem, IUpdateSystem
+    public abstract class UpdateEntitySystem<T>: EntitySystem, IUpdateSystem<T> where T: IGameTimeState
     {
         public virtual void PreExecution() {}
-
-        public virtual void Execute(float deltaTime)
+        public void Execute(T gameState)
         {
             foreach (var archetype in Archetypes)
             {
                 var entities = Ecs.Query(archetype, Scene);
+                if(!Parallel)
                 // ReSharper disable once ForCanBeConvertedToForeach
                 for (var i = 0; i < entities.Length; i++)
-                    ActOnEntity(entities[i], deltaTime);
+                    ActOnEntity(entities[i], gameState);
+                else
+                {
+                    var entitiesP = entities;
+                    System.Threading.Tasks.Parallel.For(0, entities.Length, i =>
+                    {
+                        ActOnEntity(entitiesP[i], gameState);
+                    });
+                }
             }
         }
-        
-        public abstract void ActOnEntity(Entity entity, float deltaTime);
-
+        public abstract void ActOnEntity(Entity entity, T gameState);
         public virtual void PostExecution() {}
+        public void Run(T gameState)
+        {
+            PreExecution();
+            Execute(gameState);
+            PostExecution();
+        }
     }
 
     [PublicAPI]
@@ -135,23 +147,24 @@ namespace ModusOperandi.ECS.Systems
     }
     
     [PublicAPI]
-    public abstract class UpdateComponentSystem<T> : ComponentSystem<T>, IUpdateSystem  where T :
+    public abstract class UpdateComponentSystem<T1, T2> : ComponentSystem<T1>, IUpdateSystem<T2>  where T1 :
 #if UNMANAGED
         unmanaged
 #else
         struct
 #endif
+    where T2 : IGameTimeState
     {
         public virtual void PreExecution()
         {
             
         }
 
-        public virtual void Execute(float deltaTime)
+        public void Execute(T2 gameState)
         {
             var components = Components;
             for (var i = 0; i < components.Length; i++)
-                ActOnComponent(ref components[i], deltaTime);
+                ActOnComponent(ref components[i], gameState);
         }
 
         public virtual void PostExecution()
@@ -159,7 +172,13 @@ namespace ModusOperandi.ECS.Systems
             
         }
 
-        public abstract void ActOnComponent(ref T component, float deltaTime);
+        public abstract void ActOnComponent(ref T1 component, T2 gameState);
+        public void Run(T2 gameState)
+        {
+            PreExecution();
+            Execute(gameState);
+            PostExecution();
+        }
     }
 
     [PublicAPI]

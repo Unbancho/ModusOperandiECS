@@ -17,7 +17,7 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     }
 
     [PublicAPI]
-    public interface ISystem<in T> : ISystem where T : Scene.IGameStateStruct
+    public interface ISystem<in T> : ISystem where T : IGameState
     {
         void Run(T gameState);
     }
@@ -35,11 +35,9 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     }
 
     [PublicAPI]
-    public interface IUpdateSystem : ISystem
+    public interface IUpdateSystem<in T> : ISystem<T> where T : IGameTimeState
     {
-        void PreExecution();
-        void Execute(float deltaTime);
-        void PostExecution();
+        void Execute(T gameState);
     }
 
     [PublicAPI]

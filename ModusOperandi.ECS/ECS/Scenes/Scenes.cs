@@ -42,26 +42,20 @@ namespace ModusOperandi.ECS.Scenes
 
         public abstract void Initialize();
 
-        public virtual void Update(float deltaTime)
+        public virtual void Update<T>(T gameState) where T: IGameTimeState
         {
             // ReSharper disable once ForeachCanBePartlyConvertedToQueryUsingAnotherGetEnumerator
             foreach (var system in GetSystems<UpdateSystemAttribute>())
             {
-                var updateSystem = (IUpdateSystem) system;
-                updateSystem.PreExecution();
-                updateSystem.Execute(deltaTime);
-                updateSystem.PostExecution();
+                ((ISystem<T>) system).Run(gameState);
             }
         }
-
-        public interface IGameStateStruct
+        
+        public virtual void RunSystems<T1, T2>(T2 gameState) where T1 : SystemGroupAttribute where T2: IGameState
         {
-        }
-        public virtual void RunSystems<T>() where T : SystemGroupAttribute
-        {
-            foreach (var system in GetSystems<T>())
+            foreach (var system in GetSystems<T1>())
             {
-                
+                ((ISystem<T2>) system).Run(gameState);
             }
         }
 

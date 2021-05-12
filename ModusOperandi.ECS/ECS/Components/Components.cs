@@ -122,27 +122,32 @@ namespace ModusOperandi.ECS.Components
         }
         private unsafe struct map
         {
-            private fixed int m[10_000];
+            private int* _m;
+            private int _capacity;
             public int this[Entity i]
             {
-                get => m[i];
-                set => m[i] = value;
-            }
-
-            public int[] copy()
-            {
-                var m2 = new int[10_000];
-                for (var i = 0; i < 10_000; i++)
+                get => _m[i];
+                set
                 {
-                    m2[i] = m[i];
+                    if(i >= _capacity)
+                    {
+                        _m = (int*) Marshal.ReAllocHGlobal(
+                            new(_m),
+                            new((_capacity + 1) * sizeof(int))).ToPointer();
+                        _capacity = (int)i.ID;
+                    }
+                    _m[i] = value;
                 }
-
-                return m2;
             }
-            
+
+            public map(int capacity=0)
+            {
+                _m = (int*) Marshal.AllocHGlobal(capacity * sizeof(int)).ToPointer();
+                _capacity = capacity;
+            }
         };
 
-        private map _map;
+        private map _map = new (100_000);
         private readonly List<Entity> _reverseMap;
 
         public Components<T> Components => new (_components);

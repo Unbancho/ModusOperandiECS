@@ -2,7 +2,7 @@
 
 namespace ModusOperandi.ECS.Archetypes
 {
-    public readonly struct Archetype
+    public readonly struct Archetype : IEquatable<Archetype>
     {
         public ulong Signature { get; }
         public ulong AntiSignature { get; }
@@ -32,6 +32,22 @@ namespace ModusOperandi.ECS.Archetypes
             AntiSignature = antiSignature;
             _indices = CalculateIndices(signature).ToArray();
             _antiIndices = CalculateIndices(antiSignature).ToArray();
+        }
+
+        public bool Equals(Archetype other)
+        {
+            return Signature == other.Signature && AntiSignature == other.AntiSignature;
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = 17;
+                hash = hash * 23 + Signature.GetHashCode();
+                hash = hash * 23 + AntiSignature.GetHashCode();
+                return hash;
+            }
         }
     }
 }
