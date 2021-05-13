@@ -18,7 +18,9 @@ namespace ModusOperandi.ECS.Entities
 
         // ReSharper disable once InconsistentNaming
         public readonly uint ID;
-        public uint Index => ID & EntityGenerationMask;
+        
+        //TODO: Figure out where this should be used
+        public uint Index => ID & EntityIndexMask;
         public uint Generation => (ID >> EntityIndexBits) & EntityGenerationMask;
 
         private Entity(uint id)
