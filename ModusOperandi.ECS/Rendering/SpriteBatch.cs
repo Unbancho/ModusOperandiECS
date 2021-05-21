@@ -32,7 +32,7 @@ namespace ModusOperandi.Rendering
         }
 
         // ReSharper disable once HeapView.ObjectAllocation.Evident
-        private Vertex[] _vertices = new Vertex[100 * 4];
+        private Vertex2[] _vertices = new Vertex2[100 * 4];
         private IntPtr _activeTexture;
         private uint _queueCount;
 
@@ -72,7 +72,6 @@ namespace ModusOperandi.Rendering
             {
                 if (_vertices.Length < _max)
                     Array.Resize(ref _vertices, Math.Min(_vertices.Length * 2, _max));
-                else throw new("Too many items");
             }
 
             _queueCount += 4;
@@ -88,7 +87,6 @@ namespace ModusOperandi.Rendering
         public unsafe void Draw(IntPtr texture, Vector2 position, IntRect rec, Color color, Vector2 scale,
                                 Vector2 origin, float rotation = 0)
         {
-
             var index = Create(texture);
             float sin=0, cos=1;
 
@@ -104,7 +102,7 @@ namespace ModusOperandi.Rendering
             scale.X *= rec.Width;
             scale.Y *= rec.Height;
 
-            fixed (Vertex* fixedPtr = _vertices)
+            fixed (Vertex2* fixedPtr = _vertices)
             {
                 var ptr = fixedPtr + index;
 
@@ -161,7 +159,7 @@ namespace ModusOperandi.Rendering
                 marshaledStates.texture = item.Texture;
                 unsafe
                 {
-                    fixed (Vertex* vertexPtr = _vertices)
+                    fixed (Vertex2* vertexPtr = _vertices)
                     {
                         sfRenderWindow_drawPrimitives(windowPtr, vertexPtr + index, item.Count, PrimitiveType.Quads, ref marshaledStates);
                     }
@@ -195,14 +193,22 @@ namespace ModusOperandi.Rendering
             }
         }
         
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Vertex2
+        {
+            public Vector2 Position;
+            public Color Color;
+            public Vector2 TexCoords;
+        }
+        
         [DllImport(CSFML.graphics, CallingConvention = CallingConvention.Cdecl), SuppressUnmanagedCodeSecurity]
-        private static extern unsafe void sfRenderWindow_drawPrimitives(IntPtr cPointer, Vertex* vertexPtr, uint vertexCount, PrimitiveType type, ref MarshalData renderStates);
+        private static extern unsafe void sfRenderWindow_drawPrimitives(IntPtr cPointer, Vertex2* vertexPtr, uint vertexCount, PrimitiveType type, ref MarshalData renderStates);
         
         public unsafe void Draw(IntPtr texture, FloatRect rec, IntRect src, Color color)
         {
             var index = Create(texture);
 
-            fixed (Vertex* fixedPtr = _vertices)
+            fixed (Vertex2* fixedPtr = _vertices)
             {
                 var ptr = fixedPtr + index;
 

@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Archetypes;
+using ModusOperandi.ECS.Components;
 using ModusOperandi.ECS.Scenes;
 using ModusOperandi.Rendering;
 
@@ -29,9 +29,9 @@ namespace ModusOperandi.ECS.Systems.SystemInterfaces
     }
 
     [PublicAPI]
-    public interface IComponentSystem<T> : ISystem where T : struct
+    public interface IComponentSystem<T> : ISystem where T : unmanaged
     {
-        Span<T> Components { get; }
+        Components<T> Components { get; }
     }
 
     [PublicAPI]

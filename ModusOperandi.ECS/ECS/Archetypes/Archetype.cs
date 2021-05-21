@@ -49,5 +49,20 @@ namespace ModusOperandi.ECS.Archetypes
                 return hash;
             }
         }
+
+        public override bool Equals(object obj)
+        {
+            return obj is Archetype archetype && Equals(archetype);
+        }
+
+        public static bool operator ==(Archetype left, Archetype right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(Archetype left, Archetype right)
+        {
+            return !(left == right);
+        }
     }
 }

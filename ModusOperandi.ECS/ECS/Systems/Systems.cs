@@ -103,8 +103,8 @@ namespace ModusOperandi.ECS.Systems
     [PublicAPI]
     public abstract class UpdateEntitySystem<T>: EntitySystem, IUpdateSystem<T> where T: IGameTimeState
     {
-        public virtual void PreExecution() {}
-        public void Execute(T gameState)
+        public abstract void PreExecution();
+        public virtual void Execute(T gameState)
         {
             foreach (var archetype in Archetypes)
             {
@@ -143,7 +143,9 @@ namespace ModusOperandi.ECS.Systems
     {
         protected ComponentManager<T> ComponentManager => Ecs.GetComponentManager<T>();
         protected int NumberOfComponents => ComponentManager.AssignedComponents;
-        public virtual Span<T> Components => ComponentManager.Components.ComponentArray;
+        public virtual Span<T> ComponentsSpan => ComponentManager.Components.ComponentsSpan;
+        public virtual unsafe T* ComponentsPointer => ComponentManager.Components.ComponentsPointer;
+        public virtual Components<T> Components => ComponentManager.Components;
     }
     
     [PublicAPI]
@@ -160,11 +162,24 @@ namespace ModusOperandi.ECS.Systems
             
         }
 
-        public void Execute(T2 gameState)
+        public unsafe void Execute(T2 gameState)
         {
             var components = Components;
-            for (var i = 0; i < components.Length; i++)
-                ActOnComponent(ref components[i], gameState);
+            var ptr = components.ComponentsPointer;
+            var length = components.Count;
+            if (Parallel)
+            {
+                System.Threading.Tasks.Parallel.For(0, length, i =>
+                {
+                    ActOnComponent(ref ptr[i+1], gameState);
+                });
+            }
+            else
+            {
+                var span = ComponentsSpan;
+                for (var i = 0; i < span.Length; i++)
+                    ActOnComponent(ref span[i], gameState);   
+            }
         }
 
         public virtual void PostExecution()
@@ -191,13 +206,24 @@ namespace ModusOperandi.ECS.Systems
     {
         public virtual void Draw(SpriteBatch spriteBatch)
         {
-            var components = Components;
-            // ReSharper disable once ForCanBeConvertedToForeach
-            for (var i = 0; i < components.Length; i++)
-                DrawComponent(components[i], spriteBatch);
+            var span = ComponentsSpan;
+            if (Parallel)
+            {
+                var arr = new T[span.Length];
+                span.CopyTo(arr);
+                System.Threading.Tasks.Parallel.For(0, arr.Length, i =>
+                {
+                    DrawComponent(in arr[i], spriteBatch);
+                });
+            }
+            else
+            {
+                for (var i = 0; i < span.Length; i++)
+                    DrawComponent(in span[i], spriteBatch);
+            }
         }
 
-        public abstract void DrawComponent(T component, SpriteBatch spriteBatch);
+        public abstract void DrawComponent(in T component, SpriteBatch spriteBatch);
     }
 
     [PublicAPI]

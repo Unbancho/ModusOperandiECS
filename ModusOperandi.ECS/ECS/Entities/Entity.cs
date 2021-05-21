@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+using System;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Components;
 
@@ -6,7 +6,7 @@ namespace ModusOperandi.ECS.Entities
 {
     [PublicAPI]
     [Component]
-    public readonly struct Entity
+    public readonly struct Entity : IEquatable<Entity>
     {
         public static implicit operator uint(Entity entity) => entity.ID;
         public static implicit operator Entity(uint id) => new(id);
@@ -27,12 +27,37 @@ namespace ModusOperandi.ECS.Entities
         {
             ID = id;
         }
+
+        public bool Equals(Entity other)
+        {
+            return ID == other.ID;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is Entity entity && Equals(entity);
+        }
+
+        public static bool operator ==(Entity left, Entity right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(Entity left, Entity right)
+        {
+            return !(left == right);
+        }
+
+        public override int GetHashCode()
+        {
+            return ID.GetHashCode() + 17 * 23;
+        }
     }
 
     [PublicAPI]
     public static class EntityExtensions
     {
-        public static bool IsNullEntity(this Entity entity) => entity == 0;
+        public static bool IsNullEntity(this Entity entity) => entity.ID == 0u;
 
         //[MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T Get<T>(this Entity entity) where T :

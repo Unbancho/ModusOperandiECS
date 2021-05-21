@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using ModusOperandi.ECS.Entities;
@@ -10,12 +11,10 @@ namespace ModusOperandi.ECS.Components
     [PublicAPI]
     public interface IComponentManager
     {
-        public static Type[] ComponentSignatures { get; } = new Type[Ecs.MaxComponents];
         int LookUp(Entity entity);
         Entity ReverseLookUp(uint index);
         public Entity[] EntitiesWithComponent { get; }
         public int AssignedComponents { get;}
-        public unsafe void* Components { get; }
     }
     
     [PublicAPI]
@@ -29,30 +28,31 @@ namespace ModusOperandi.ECS.Components
     {
         void AddComponent(T component, Entity entity);
         ref T GetComponent(Entity entity);
-        public new Components<T> Components { get; } 
+        public Components<T> Components { get; } 
     }
-
-    [PublicAPI]
-    public readonly ref struct Components<T> where T :
-#if UNMANAGED
-        unmanaged
-#else
-        struct
-#endif
+    
+    public readonly unsafe struct Components<T> where T: unmanaged
     {
-        public Span<T> ComponentArray => _componentArray.Slice(1, _componentArray.Length - 1);
-        private readonly Span<T> _componentArray;
-            
-        public Components(Span<T> arr)
+        private readonly int* _map;
+        public readonly int Count;
+
+        public Components(int* map, T* components, int count)
         {
-            _componentArray = arr;
+            _map = map;
+            ComponentsPointer = components;
+            Count = count;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T Get(uint i) => ref ComponentsPointer[_map[i]];
         
-        public Components(T[] arr, int nComponents)
-        {
-            _componentArray = arr;
-            _componentArray = _componentArray.Slice(0, nComponents + 1);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T Get(Entity e) => ref ComponentsPointer[_map[e.Index]];
+        public Span<T> ComponentsSpan => new(ComponentsPointer+1, Count);
+        public T* ComponentsPointer { get; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int LookUp(Entity e) => _map[e.Index];
     }
 
     public static unsafe class ComponentArrays
@@ -81,15 +81,15 @@ namespace ModusOperandi.ECS.Components
                     new ((AssignedComponents+1) * sizeof(T))).ToPointer();
                 _capacity = AssignedComponents-1;
             }
-            _map[entity] = AssignedComponents;
-            _reverseMap.Add(entity);
+            _map[entity.Index] = AssignedComponents;
+            _reverseMap.Add(entity.Index);
             var arr = (T*)ComponentArrays.Arrays[_index];
-            arr[_map[entity]] = component;
+            arr[_map[entity.Index]] = component;
         }
 
         public unsafe void RemoveComponent(Entity entity)
         {
-            Swap(_map[entity], AssignedComponents);
+            Swap(_map[entity.Index], AssignedComponents);
             AssignedComponents--;
             _reverseMap.RemoveAt(_reverseMap.Count-1);
             //_map.Pop();
@@ -97,11 +97,11 @@ namespace ModusOperandi.ECS.Components
 
         public unsafe void Swap(Entity left, Entity right)
         {
-            (_components[_map[left]], _components[_map[right]]) = 
-                (_components[_map[right]], _components[_map[left]]);
-            (_reverseMap[_map[left]], _reverseMap[_map[right]]) =
-                (_reverseMap[_map[right]], _reverseMap[_map[left]]);
-            (_map[left], _map[right]) = (_map[right], _map[left]);
+            (_components[_map[left.Index]], _components[_map[right.Index]]) = 
+                (_components[_map[right.Index]], _components[_map[left.Index]]);
+            (_reverseMap[_map[left.Index]], _reverseMap[_map[right.Index]]) =
+                (_reverseMap[_map[right.Index]], _reverseMap[_map[left.Index]]);
+            (_map[left.Index], _map[right.Index]) = (_map[right.Index], _map[left.Index]);
         }
 
         public unsafe void Swap(int left, int right)
@@ -115,7 +115,7 @@ namespace ModusOperandi.ECS.Components
         public unsafe ref T GetComponent(Entity entity)
         {
             T* GetArray() => (T*) ComponentArrays.Arrays[_index];
-            int GetIndex() => _map[entity];
+            int GetIndex() => _map[entity.Index];
             static ref T IndexIntoArray(T* arr, int idx) => ref arr[idx]; 
             return ref IndexIntoArray(GetArray(),GetIndex());
         }
@@ -123,10 +123,9 @@ namespace ModusOperandi.ECS.Components
         private readonly unsafe int* _map;
         private readonly List<Entity> _reverseMap;
 
-        public Components<T> Components => new (_components);
+        public unsafe Components<T> Components => new(_map, (T*) ComponentArrays.Arrays[_index],
+            AssignedComponents);
         
-
-        unsafe void* IComponentManager.Components => ComponentArrays.Arrays[_index];
 
         public unsafe ComponentManager(int capacity=50)
         {

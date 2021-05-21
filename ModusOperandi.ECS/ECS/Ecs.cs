@@ -87,6 +87,11 @@ namespace ModusOperandi.ECS
             return ComponentManagers<T>.ComponentManager;
         }
 
+        public static IComponentManager GetComponentManager(int index)
+        {
+            return _componentManagers[index];
+        }
+
         public static void SetComponentManager<T>(ComponentManager<T> componentManager) where T :
 #if UNMANAGED
             unmanaged
