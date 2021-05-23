@@ -24,7 +24,6 @@ namespace ModusOperandi.ECS
             for (var i = 0; i < MaxComponents; i++)
             {
             }
-
             return e2;
         }
         
